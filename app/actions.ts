@@ -162,23 +162,3 @@ export async function deleteAttendanceAction(formData: FormData) {
   redirect("/dashboard?notice=deleted");
 }
 
-export async function requireUser() {
-  const session = await getSession();
-  if (!session?.company_id) redirect("/passcode");
-  if (!session.user_id) redirect("/scan");
-  return session;
-}
-
-export async function requireFacility() {
-  const session = await getSession();
-  if (!session?.company_id) redirect("/passcode");
-  return session;
-}
-
-export async function requireAdmin() {
-  const session = await requireUser();
-  if (session.privilege !== "CEO" && session.privilege !== "Admin") {
-    fail("/", "admin-only");
-  }
-  return session;
-}

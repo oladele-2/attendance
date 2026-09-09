@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/app/actions";
+import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import {
   getUserById,

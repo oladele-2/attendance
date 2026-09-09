@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireUser, saveAttendanceEdit } from "@/app/actions";
+import { saveAttendanceEdit } from "@/app/actions";
+import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { getAttendanceById } from "@/lib/queries";
 import { notFound, redirect } from "next/navigation";

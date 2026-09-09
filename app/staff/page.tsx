@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdmin } from "@/app/actions";
+import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { getUserById, getUserPrivileges, staffPrivilegeCount, staffPrivilegePage } from "@/lib/queries";
 import { IconCheck, IconUser, IconUsers, IconXCircle } from "@/components/icons";

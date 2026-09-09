@@ -2,10 +2,16 @@ import { withDb } from "@/lib/db";
 import { getUserById } from "@/lib/queries";
 import { punchAttendance } from "@/lib/attendance";
 import { euclideanDistance, FACE_THRESHOLD, normalizeVector, parseFaceVector } from "@/lib/face";
-import { getSession, setSession } from "@/lib/session";
+import { decryptSession, encryptSession, sessionCookieHeader } from "@/lib/session";
+
+function readSessionCookie(request: Request) {
+  const cookie = request.headers.get("cookie") ?? "";
+  const match = cookie.match(/(?:^|;\s*)attendance_session=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const session = await decryptSession(readSessionCookie(request));
   if (!session?.user_id || !session.privilege_id || !session.company_id) {
     return Response.json(
       { success: false, status_code: 401, message: "Your session expired. Please sign in again." },
@@ -21,7 +27,6 @@ export async function POST(request: Request) {
       message: "Please wait a few seconds before trying again.",
     });
   }
-  await setSession({ ...session, last_attempt: Math.floor(Date.now() / 1000) });
 
   let body: { face_vector?: number[] } = {};
   try {
@@ -31,6 +36,7 @@ export async function POST(request: Request) {
   }
 
   const liveFace = Array.isArray(body.face_vector) && body.face_vector.length === 128 ? body.face_vector : null;
+  const nextSession = { ...session, last_attempt: Math.floor(Date.now() / 1000) };
 
   try {
     const result = await withDb(async (db) => {
@@ -41,7 +47,8 @@ export async function POST(request: Request) {
           return {
             success: false as const,
             status_code: 404,
-            message: "No face template is saved for you yet. Use Check-in / Check-out instead, or ask an admin to register your face.",
+            message:
+              "No face template is saved for you yet. Use Check-in / Check-out instead, or ask an admin to register your face.",
           };
         }
         const distance = euclideanDistance(normalizeVector(liveFace), normalizeVector(stored));
@@ -66,7 +73,12 @@ export async function POST(request: Request) {
       };
     });
 
-    return Response.json(result);
+    const token = await encryptSession(nextSession);
+    return Response.json(result, {
+      headers: {
+        "Set-Cookie": sessionCookieHeader(token),
+      },
+    });
   } catch {
     return Response.json({
       success: false,

@@ -1,5 +1,5 @@
 import { FaceCapture } from "@/components/FaceCapture";
-import { requireAdmin } from "@/app/actions";
+import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { getPrivilegeAtCompany, getUserByFriendly, getUserById } from "@/lib/queries";
 import { notFound } from "next/navigation";

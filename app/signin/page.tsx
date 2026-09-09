@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PasswordToggle } from "@/components/PasswordToggle";
-import { requireFacility, submitPasswordLogin } from "@/app/actions";
+import { requireFacility } from "@/lib/guards";
 import { redirect } from "next/navigation";
 import { IconLogIn, IconMail, IconQr } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
@@ -26,7 +26,7 @@ export default async function SignInPage({
           <p className="mt-1 text-sm text-slate-500">{session.company}</p>
         </div>
         {params.error ? <FlashBanner error={params.error} /> : null}
-        <form action={submitPasswordLogin} className="space-y-5" autoComplete="off">
+        <form action="/api/session/password" method="post" className="space-y-5" autoComplete="off">
           <div>
             <label htmlFor="identifier" className="mb-2 block text-sm font-semibold text-slate-700">
               Email or phone

@@ -1,6 +1,6 @@
 import { QrCards } from "@/components/QrCards";
 import { PrintIdsButton } from "@/components/PrintIdsButton";
-import { requireAdmin } from "@/app/actions";
+import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { formatAddress } from "@/lib/brand";
 import { getCompanyById, getUserById, getUserPrivileges, staffPrivilegeCount, staffPrivilegePage } from "@/lib/queries";

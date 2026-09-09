@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { QrScanner } from "@/components/QrScanner";
-import { requireFacility } from "@/app/actions";
+import { requireFacility } from "@/lib/guards";
 import { redirect } from "next/navigation";
 import { IconLogIn, IconQr } from "@/components/icons";
 
