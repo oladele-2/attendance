@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 
 export function PendingButton({
   children,
@@ -12,9 +12,19 @@ export function PendingButton({
   className?: string;
   pendingLabel?: string;
 }) {
-  const { pending } = useFormStatus();
+  const [pending, setPending] = useState(false);
+
   return (
-    <button type="submit" disabled={pending} className={className} aria-busy={pending}>
+    <button
+      type="submit"
+      disabled={pending}
+      className={className}
+      aria-busy={pending}
+      onClick={() => {
+        // Native form posts don't update React form status; mark pending on click.
+        setPending(true);
+      }}
+    >
       {pending ? pendingLabel : children}
     </button>
   );

@@ -24,7 +24,7 @@ type Props = {
 };
 
 export function Nav({ company, personName, personHref, privilege, loggedIn }: Props) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
   const admin = privilege === "CEO" || privilege === "Admin";
 
@@ -39,7 +39,8 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
     { href: "/logout", label: "Logout", icon: IconLogOut, show: loggedIn },
   ].filter((item) => item.show);
 
-  const isActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href));
+  const isActive = (href: string) =>
+    pathname === href || (href !== "/" && pathname.startsWith(href));
 
   const linkClass = (href: string) =>
     `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
