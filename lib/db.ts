@@ -1,6 +1,8 @@
 import { env } from "cloudflare:workers";
 import { createConnection, type Connection, type RowDataPacket } from "mysql2/promise";
 
+type DbCfg = { host: string; user: string; password: string; database: string; port: number };
+
 function readEnv(name: "SESSION_SECRET" | "PASSWORD_PEPPER" | "DATABASE_URL") {
   try {
     const value = env[name];
@@ -20,25 +22,31 @@ function tzOffset(): string {
   return `${sign}${hh}:${mm}`;
 }
 
-function fromHyperdrive(): { host: string; user: string; password: string; database: string; port: number } | null {
+function isLoopback(host: string) {
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+function fromHyperdrive(): DbCfg | null {
   try {
     const hd = env.HYPERDRIVE;
-    if (hd && typeof hd.host === "string" && hd.host.length > 0 && hd.host !== "localhost" && hd.host !== "127.0.0.1") {
-      return {
-        host: hd.host,
-        user: hd.user,
-        password: hd.password,
-        database: hd.database,
-        port: hd.port,
-      };
-    }
+    if (!hd || typeof hd.host !== "string" || hd.host.length === 0) return null;
+    // Local wrangler/Vinext mocks Hyperdrive as loopback. Prefer DATABASE_URL there.
+    // Production Hyperdrive also sometimes reports host "localhost" — still use it when
+    // DATABASE_URL is not set.
+    if (isLoopback(hd.host) && readEnv("DATABASE_URL")) return null;
+    return {
+      host: hd.host,
+      user: hd.user,
+      password: hd.password,
+      database: hd.database,
+      port: hd.port,
+    };
   } catch {
     return null;
   }
-  return null;
 }
 
-function fromDatabaseUrl() {
+function fromDatabaseUrl(): DbCfg | null {
   const url = readEnv("DATABASE_URL");
   if (!url) return null;
   const parsed = new URL(url);
@@ -57,20 +65,31 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
     throw new Error("Database is not configured. Set Hyperdrive or DATABASE_URL.");
   }
 
-  const db = await createConnection({
-    host: cfg.host,
-    user: cfg.user,
-    password: cfg.password,
-    database: cfg.database,
-    port: cfg.port,
-    disableEval: true,
-  });
-
   try {
-    await db.query("SET time_zone = ?", [tzOffset()]);
-    return await fn(db);
-  } finally {
-    await db.end();
+    const db = await createConnection({
+      host: cfg.host,
+      user: cfg.user,
+      password: cfg.password,
+      database: cfg.database,
+      port: cfg.port,
+      disableEval: true,
+    });
+
+    try {
+      await db.query(`SET time_zone = '${tzOffset()}'`);
+      return await fn(db);
+    } finally {
+      await db.end();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[db]", message, {
+      host: cfg.host,
+      port: cfg.port,
+      database: cfg.database,
+      user: cfg.user,
+    });
+    throw error;
   }
 }
 
