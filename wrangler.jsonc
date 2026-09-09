@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "attendance-vinext",
+  "name": "attendance",
   "compatibility_date": "2026-09-09",
   "compatibility_flags": ["nodejs_compat"],
   "main": "vinext/server/fetch-handler",
@@ -22,7 +22,7 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "00000000000000000000000000000000"
+      "id": "25941e25a10f4290b01888a241f26147"
     }
   ]
 }

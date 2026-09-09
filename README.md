@@ -31,7 +31,7 @@ npx wrangler secret put PASSWORD_PEPPER
 npm run deploy
 ```
 
-`wrangler.jsonc` currently has a placeholder Hyperdrive id. Local queries fall back to `DATABASE_URL` when the Hyperdrive host is empty or `localhost`.
+Production uses Hyperdrive id `25941e25a10f4290b01888a241f26147` (`env.HYPERDRIVE`). Local `npm run dev` still uses `DATABASE_URL` in `.dev.vars` when Hyperdrive’s host is localhost.
 
 ## GitHub and Cloudflare
 
@@ -51,14 +51,15 @@ In the Worker → **Settings** → **Build**:
 
 Recommended: empty build command, deploy command **`npm run deploy`**. That runs Vinext’s build, then Wrangler with `dist/server/wrangler.json`.
 
-The Worker name must stay `attendance-vinext` (same as `wrangler.jsonc`).
+The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
-After a successful first deploy, add runtime secrets under **Settings** → **Variables and Secrets**:
+After a successful deploy, add runtime secrets under **Settings** → **Variables and Secrets**:
 
 - `SESSION_SECRET`
 - `PASSWORD_PEPPER`
+- `DATABASE_URL` (optional in production once Hyperdrive is bound; keep it in `.dev.vars` for local)
 
-Replace the placeholder Hyperdrive id in `wrangler.jsonc` with a real Hyperdrive (Cloudways MariaDB), commit, and push. Do not commit `.dev.vars` or database passwords.
+Do not commit `.dev.vars` or database passwords. The Hyperdrive origin password stays in the Cloudflare Hyperdrive config, not in git.
 
 ## Routes
 
