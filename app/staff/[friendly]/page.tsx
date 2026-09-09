@@ -1,0 +1,53 @@
+import { FaceCapture } from "@/components/FaceCapture";
+import { requireAdmin } from "@/app/actions";
+import { withDb } from "@/lib/db";
+import { getPrivilegeAtCompany, getUserByFriendly, getUserById } from "@/lib/queries";
+import { notFound } from "next/navigation";
+import { IconScanFace, IconUser } from "@/components/icons";
+
+export default async function RegisterFacePage({
+  params,
+}: {
+  params: Promise<{ friendly: string }>;
+}) {
+  const session = await requireAdmin();
+  const { friendly } = await params;
+  const staff = await withDb(async (db) => {
+    const user = /^\d+$/.test(friendly)
+      ? await getUserById(db, Number(friendly))
+      : await (async () => {
+          const ref = await getUserByFriendly(db, friendly);
+          return ref ? getUserById(db, ref.user_id) : null;
+        })();
+    if (!user) return null;
+    const privilege = await getPrivilegeAtCompany(db, user.user_id, session.company_id);
+    if (!privilege) return null;
+    return user;
+  });
+  if (!staff) notFound();
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-slate-200 sm:p-8">
+        <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002]">
+          <IconUser size={28} />
+        </span>
+        <h2 className="text-2xl font-bold text-slate-800">
+          {staff.first} {staff.last}
+        </h2>
+        <p className="mt-2 mb-6 flex items-center justify-center gap-2 text-slate-600">
+          <IconScanFace size={16} />
+          {staff.face_vector
+            ? "A face template is already saved. You can update it."
+            : "No face template yet. Register one so this staff member can use face check-in."}
+        </p>
+        <FaceCapture
+          mode="register"
+          endpoint="/api/save-face"
+          extraBody={{ user_id: staff.user_id }}
+          buttonLabel={staff.face_vector ? "Update face template" : "Save face template"}
+        />
+      </div>
+    </main>
+  );
+}

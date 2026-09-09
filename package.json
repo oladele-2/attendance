@@ -1,0 +1,39 @@
+{
+  "name": "attendance-vinext",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm",
+  "dependencies": {
+    "@vinext/cloudflare": "^1.0.0-beta.7",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.12",
+    "mysql2": "^3.24.4",
+    "qrcode": "^1.5.4",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-server-dom-webpack": "^19.2.8",
+    "vinext": "^1.0.0-beta.9"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.54.6",
+    "@tailwindcss/postcss": "latest",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "latest",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-rsc": "^0.5.34",
+    "tailwindcss": "latest",
+    "typescript": "latest",
+    "vite": "^8.2.2",
+    "wrangler": "^4.130.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.dev.vars ./node_modules/vinext/dist/cli.js dev",
+    "build": "vinext build",
+    "start": "wrangler dev --config dist/server/wrangler.json",
+    "deploy": "vinext-cloudflare deploy --config dist/server/wrangler.json"
+  }
+}

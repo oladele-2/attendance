@@ -1,0 +1,174 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { withDb } from "@/lib/db";
+import {
+  deleteAttendance,
+  getAttendanceById,
+  getCompanyById,
+  getUserByEmail,
+  getUserById,
+  getUserByPhone,
+  getUserPrivileges,
+  updateAttendanceDash,
+} from "@/lib/queries";
+import { companyAllowsLogin, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
+import { getSession, setSession } from "@/lib/session";
+
+function fail(path: string, code: string): never {
+  redirect(`${path}?error=${encodeURIComponent(code)}`);
+}
+
+function hhmm(raw: string) {
+  const match = raw.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return "";
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
+export async function submitPasscode(formData: FormData) {
+  const raw = String(formData.get("facility_id") ?? "").trim();
+  const facilityId = Number.parseInt(raw, 10);
+  if (!Number.isFinite(facilityId)) {
+    fail("/passcode", "invalid-passcode");
+  }
+
+  try {
+    const facility = await withDb((db) => getCompanyById(db, facilityId));
+    if (!facility) {
+      fail("/passcode", "invalid-passcode");
+    }
+    await setSession({
+      company_id: facility.id,
+      company: facility.name,
+    });
+  } catch {
+    fail("/passcode", "db");
+  }
+  redirect("/scan");
+}
+
+export async function submitPasswordLogin(formData: FormData) {
+  const session = await getSession();
+  if (!session?.company_id) fail("/passcode", "session");
+
+  const identifier = String(formData.get("member_email") ?? "").trim();
+  const password = String(formData.get("member_password") ?? "").trim();
+  if (!identifier || !password) {
+    fail("/signin", "missing-details");
+  }
+
+  try {
+    const user = await withDb(async (db) => {
+      if (isEmail(identifier)) return getUserByEmail(db, identifier);
+      if (isPhone(identifier)) return getUserByPhone(db, identifier);
+      return null;
+    });
+
+    if (!user) {
+      fail("/signin", "invalid-login");
+    }
+    if (!user.last || !user.pass || !verifyPhpPassword(password, user.last, user.pass)) {
+      fail("/signin", "invalid-login");
+    }
+    if (!userApproved(user)) {
+      redirect(`/signin?error=${encodeURIComponent(`Your account is currently marked as: ${user.status}. Contact support.`)}`);
+    }
+
+    const ok = await withDb(async (db) => {
+      const privileges = await getUserPrivileges(db, user.user_id, "Staff", "DISAPPROVED", session.company_id);
+      const company = await getCompanyById(db, session.company_id);
+      if (!privileges || !company || !companyAllowsLogin(company)) return null;
+      return privileges;
+    });
+
+    if (!ok) {
+      fail("/signin", "no-access");
+    }
+
+    await setSession({
+      ...session,
+      user_id: user.user_id,
+      first: user.first,
+      last: user.last,
+      privilege: ok.privilege,
+      privilege_id: ok.id,
+    });
+  } catch {
+    fail("/signin", "db");
+  }
+  redirect("/verification");
+}
+
+export async function saveAttendanceEdit(id: number, formData: FormData) {
+  const session = await getSession();
+  if (!session?.company_id) fail("/passcode", "session");
+  if (session.privilege !== "CEO") fail("/dashboard", "ceo-only");
+
+  const attendanceDate = String(formData.get("attendance_date") ?? "").slice(0, 10);
+  const checkInRaw = hhmm(String(formData.get("check_in_time") ?? ""));
+  const checkOutRaw = hhmm(String(formData.get("check_out_time") ?? ""));
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate) || !checkInRaw) {
+    fail(`/dashboard/${id}/edit`, "invalid-times");
+  }
+  if (checkOutRaw && checkOutRaw < checkInRaw) {
+    fail(`/dashboard/${id}/edit`, "invalid-times");
+  }
+
+  const status = checkOutRaw ? 1 : 0;
+  const checkIn = `${attendanceDate} ${checkInRaw}:00`;
+  const checkOut = checkOutRaw ? `${attendanceDate} ${checkOutRaw}:00` : null;
+
+  try {
+    const record = await withDb((db) => getAttendanceById(db, id));
+    if (!record || record.hospital_id !== session.company_id) {
+      fail("/dashboard", "not-found");
+    }
+    await withDb((db) =>
+      updateAttendanceDash(db, id, session.company_id, checkIn, checkOut, status),
+    );
+  } catch {
+    fail(`/dashboard/${id}/edit`, "db");
+  }
+  redirect("/dashboard?notice=updated");
+}
+
+export async function deleteAttendanceAction(formData: FormData) {
+  const session = await getSession();
+  if (!session?.company_id) fail("/passcode", "session");
+  if (session.privilege !== "CEO") fail("/dashboard", "ceo-only");
+  const id = Number(formData.get("id"));
+  if (!id) fail("/dashboard", "not-found");
+
+  try {
+    const record = await withDb((db) => getAttendanceById(db, id));
+    if (!record || record.hospital_id !== session.company_id) {
+      fail("/dashboard", "not-found");
+    }
+    await withDb((db) => deleteAttendance(db, id, session.company_id));
+  } catch {
+    fail("/dashboard", "db");
+  }
+  redirect("/dashboard?notice=deleted");
+}
+
+export async function requireUser() {
+  const session = await getSession();
+  if (!session?.company_id) redirect("/passcode");
+  if (!session.user_id) redirect("/scan");
+  return session;
+}
+
+export async function requireFacility() {
+  const session = await getSession();
+  if (!session?.company_id) redirect("/passcode");
+  return session;
+}
+
+export async function requireAdmin() {
+  const session = await requireUser();
+  if (session.privilege !== "CEO" && session.privilege !== "Admin") {
+    fail("/", "admin-only");
+  }
+  return session;
+}
