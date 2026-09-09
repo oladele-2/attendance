@@ -5,6 +5,9 @@ import { encryptSession, sessionCookieHeader } from "@/lib/session";
 export async function POST(request: Request) {
   const form = await request.formData();
   const raw = String(form.get("facility_id") ?? "").trim();
+  if (!/^\d+$/.test(raw)) {
+    return Response.redirect(new URL("/passcode?error=invalid-passcode", request.url), 303);
+  }
   const facilityId = Number.parseInt(raw, 10);
 
   if (!Number.isFinite(facilityId)) {

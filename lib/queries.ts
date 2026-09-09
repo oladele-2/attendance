@@ -202,14 +202,16 @@ export async function insertCheckIn(
   attendanceDate: string,
   hospitalId: number,
 ) {
-  await db.execute<ResultSetHeader>(
+  // Hyperdrive's MySQL path supports the text protocol used by query(), but not
+  // COM_STMT_PREPARE (which mysql2's execute() uses).
+  await db.query<ResultSetHeader>(
     "INSERT INTO attendance (user_id, attendance_date, check_in_time, hospital_id) VALUES (?, ?, NOW(), ?)",
     [userId, attendanceDate, hospitalId],
   );
 }
 
 export async function updateCheckOut(db: Connection, status: number, id: number) {
-  await db.execute("UPDATE attendance SET status = ?, check_out_time = NOW() WHERE id = ?", [status, id]);
+  await db.query("UPDATE attendance SET status = ?, check_out_time = NOW() WHERE id = ?", [status, id]);
 }
 
 export async function updateAttendanceDash(
@@ -220,7 +222,7 @@ export async function updateAttendanceDash(
   checkOut: string | null,
   status: number,
 ) {
-  const [result] = await db.execute<ResultSetHeader>(
+  const [result] = await db.query<ResultSetHeader>(
     "UPDATE attendance SET check_in_time=?, check_out_time=?, status=? WHERE id=? AND hospital_id=?",
     [checkIn, checkOut, status, id, hospitalId],
   );
@@ -228,7 +230,7 @@ export async function updateAttendanceDash(
 }
 
 export async function deleteAttendance(db: Connection, id: number, hospitalId: number) {
-  const [result] = await db.execute<ResultSetHeader>("DELETE FROM attendance WHERE id=? AND hospital_id=?", [
+  const [result] = await db.query<ResultSetHeader>("DELETE FROM attendance WHERE id=? AND hospital_id=?", [
     id,
     hospitalId,
   ]);
@@ -236,9 +238,9 @@ export async function deleteAttendance(db: Connection, id: number, hospitalId: n
 }
 
 export async function updateFaceVector(db: Connection, faceVector: string, userId: number) {
-  await db.execute("UPDATE user SET face_vector = ? WHERE user_id = ?", [faceVector, userId]);
+  await db.query("UPDATE user SET face_vector = ? WHERE user_id = ?", [faceVector, userId]);
 }
 
 export async function updatePrivilegeStatus(db: Connection, status: string, id: number) {
-  await db.execute("UPDATE `privilege` SET `status`=?, `at`=now() WHERE `id`=?", [status, id]);
+  await db.query("UPDATE `privilege` SET `status`=?, `at`=now() WHERE `id`=?", [status, id]);
 }

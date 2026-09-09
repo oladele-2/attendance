@@ -21,11 +21,14 @@ export async function POST(request: Request) {
 
   const elapsed = Date.now() / 1000 - (session.last_attempt ?? 0);
   if (elapsed < 3) {
-    return Response.json({
-      success: false,
-      status_code: 429,
-      message: "Please wait a few seconds before trying again.",
-    });
+    return Response.json(
+      {
+        success: false,
+        status_code: 429,
+        message: "Please wait a few seconds before trying again.",
+      },
+      { status: 429 },
+    );
   }
 
   let body: { face_vector?: number[] } = {};
@@ -35,7 +38,12 @@ export async function POST(request: Request) {
     body = {};
   }
 
-  const liveFace = Array.isArray(body.face_vector) && body.face_vector.length === 128 ? body.face_vector : null;
+  const liveFace =
+    Array.isArray(body.face_vector) &&
+    body.face_vector.length === 128 &&
+    body.face_vector.every(Number.isFinite)
+      ? body.face_vector
+      : null;
   const nextSession = { ...session, last_attempt: Math.floor(Date.now() / 1000) };
 
   try {
@@ -75,6 +83,7 @@ export async function POST(request: Request) {
 
     const token = await encryptSession(nextSession);
     return Response.json(result, {
+      status: result.status_code,
       headers: {
         "Set-Cookie": sessionCookieHeader(token),
       },

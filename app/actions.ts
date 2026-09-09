@@ -27,6 +27,9 @@ function hhmm(raw: string) {
 
 export async function submitPasscode(formData: FormData) {
   const raw = String(formData.get("facility_id") ?? "").trim();
+  if (!/^\d+$/.test(raw)) {
+    fail("/passcode", "invalid-passcode");
+  }
   const facilityId = Number.parseInt(raw, 10);
   if (!Number.isFinite(facilityId)) {
     fail("/passcode", "invalid-passcode");
@@ -67,44 +70,50 @@ export async function submitPasswordLogin(formData: FormData) {
     fail("/signin", "missing-details");
   }
 
+  let user;
   try {
-    const user = await withDb(async (db) => {
+    user = await withDb(async (db) => {
       if (isEmail(identifier)) return getUserByEmail(db, identifier);
       if (isPhone(identifier)) return getUserByPhone(db, identifier);
       return null;
     });
+  } catch {
+    fail("/signin", "db");
+  }
 
-    if (!user) {
-      fail("/signin", "invalid-login");
-    }
-    if (!user.last || !user.pass || !verifyPhpPassword(password, user.last, user.pass)) {
-      fail("/signin", "invalid-login");
-    }
-    if (!userApproved(user)) {
-      redirect(`/signin?error=${encodeURIComponent(`Your account is currently marked as: ${user.status}. Contact support.`)}`);
-    }
+  if (!user || !user.last || !user.pass || !verifyPhpPassword(password, user.last, user.pass)) {
+    fail("/signin", "invalid-login");
+  }
+  if (!userApproved(user)) {
+    redirect(`/signin?error=${encodeURIComponent(`Your account is currently marked as: ${user.status}. Contact support.`)}`);
+  }
 
-    const ok = await withDb(async (db) => {
+  let privileges;
+  try {
+    privileges = await withDb(async (db) => {
       const privileges = await getUserPrivileges(db, user.user_id, "Staff", "DISAPPROVED", session.company_id);
       const company = await getCompanyById(db, session.company_id);
       if (!privileges || !company || !companyAllowsLogin(company)) return null;
       return privileges;
     });
+  } catch {
+    fail("/signin", "db");
+  }
+  if (!privileges) {
+    fail("/signin", "no-access");
+  }
 
-    if (!ok) {
-      fail("/signin", "no-access");
-    }
-
+  try {
     await setSession({
       ...session,
       user_id: user.user_id,
       first: user.first,
       last: user.last,
-      privilege: ok.privilege,
-      privilege_id: ok.id,
+      privilege: privileges.privilege,
+      privilege_id: privileges.id,
     });
   } catch {
-    fail("/signin", "db");
+    fail("/signin", "session");
   }
   redirect("/verification");
 }
@@ -129,11 +138,16 @@ export async function saveAttendanceEdit(id: number, formData: FormData) {
   const checkIn = `${attendanceDate} ${checkInRaw}:00`;
   const checkOut = checkOutRaw ? `${attendanceDate} ${checkOutRaw}:00` : null;
 
+  let record;
   try {
-    const record = await withDb((db) => getAttendanceById(db, id));
-    if (!record || record.hospital_id !== session.company_id) {
-      fail("/dashboard", "not-found");
-    }
+    record = await withDb((db) => getAttendanceById(db, id));
+  } catch {
+    fail(`/dashboard/${id}/edit`, "db");
+  }
+  if (!record || record.hospital_id !== session.company_id) {
+    fail("/dashboard", "not-found");
+  }
+  try {
     await withDb((db) =>
       updateAttendanceDash(db, id, session.company_id, checkIn, checkOut, status),
     );
@@ -150,15 +164,19 @@ export async function deleteAttendanceAction(formData: FormData) {
   const id = Number(formData.get("id"));
   if (!id) fail("/dashboard", "not-found");
 
+  let record;
   try {
-    const record = await withDb((db) => getAttendanceById(db, id));
-    if (!record || record.hospital_id !== session.company_id) {
-      fail("/dashboard", "not-found");
-    }
+    record = await withDb((db) => getAttendanceById(db, id));
+  } catch {
+    fail("/dashboard", "db");
+  }
+  if (!record || record.hospital_id !== session.company_id) {
+    fail("/dashboard", "not-found");
+  }
+  try {
     await withDb((db) => deleteAttendance(db, id, session.company_id));
   } catch {
     fail("/dashboard", "db");
   }
   redirect("/dashboard?notice=deleted");
 }
-

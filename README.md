@@ -11,6 +11,9 @@ Rebuild of the PHP attendance app. The original PHP tree stays at `../attendance
 2. `npm install`
 3. `npm run dev`
 
+Run `npm run check` before deploying. It type-checks the app, builds the generated
+Worker entry point, and validates the final Worker bundle with Wrangler.
+
 Open the printed local URL. Enter the facility passcode (company `id`), then QR or email/phone login.
 
 ## Hyperdrive (Cloudways MariaDB)

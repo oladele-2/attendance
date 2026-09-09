@@ -3,6 +3,7 @@ node_modules
 .dev.vars
 .next
 next-env.d.ts
+*.tsbuildinfo
 /dist/
 .vinext/
 .wrangler/
@@ -10,4 +11,3 @@ worker-configuration.d.ts
 idcard.png
 *.log
 .tools/
-

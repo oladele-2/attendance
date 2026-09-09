@@ -23,7 +23,12 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ success: false, message: "The face data was incomplete. Hold still and try again." });
   }
-  if (!body.user_id || !Array.isArray(body.face_vector) || body.face_vector.length !== 128) {
+  if (
+    !body.user_id ||
+    !Array.isArray(body.face_vector) ||
+    body.face_vector.length !== 128 ||
+    !body.face_vector.every(Number.isFinite)
+  ) {
     return Response.json({ success: false, message: "No clear face was captured. Look at the camera and try again." });
   }
 
