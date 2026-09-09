@@ -53,11 +53,15 @@ Recommended: empty build command, deploy command **`npm run deploy`**. That runs
 
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
-After a successful deploy, add runtime secrets under **Settings** → **Variables and Secrets**:
+### Secrets (Build variables vs Worker secrets)
 
-- `SESSION_SECRET`
-- `PASSWORD_PEPPER`
-- `DATABASE_URL` (optional in production once Hyperdrive is bound; keep it in `.dev.vars` for local)
+Wrangler needs **`SESSION_SECRET`** and **`PASSWORD_PEPPER`** on the Worker at deploy time. They are **not** the same as plain environment variables unless you upload them during deploy.
+
+For **Workers Builds**, add both under **Build** → **Build variables** (as you already did). `npm run deploy` reads them from the build environment and passes them to Wrangler with `--secrets-file`.
+
+Alternatively, set them once under the Worker → **Settings** → **Variables and Secrets** → **Secrets** (Production). That also works for manual `wrangler deploy`.
+
+Optional locally only: `DATABASE_URL` in `.dev.vars` (Hyperdrive handles production DB access).
 
 Do not commit `.dev.vars` or database passwords. The Hyperdrive origin password stays in the Cloudflare Hyperdrive config, not in git.
 
