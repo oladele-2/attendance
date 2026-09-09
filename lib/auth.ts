@@ -6,11 +6,12 @@ import { COMPANY_OK_STATUSES } from "./types";
 export function verifyPhpPassword(plain: string, lastName: string, hash: string) {
   let pepper = "";
   try {
-    pepper = env.PASSWORD_PEPPER || "";
+    const fromEnv = env.PASSWORD_PEPPER;
+    if (typeof fromEnv === "string") pepper = fromEnv;
   } catch {
-    pepper = process.env.PASSWORD_PEPPER || "";
+    pepper = "";
   }
-  pepper = pepper || process.env.PASSWORD_PEPPER || "";
+  if (!pepper) pepper = process.env.PASSWORD_PEPPER || "";
   const salted = `${plain}${lastName}${pepper}`;
   const normalized = hash.replace(/^\$2y\$/, "$2a$");
   return bcrypt.compareSync(salted, normalized);

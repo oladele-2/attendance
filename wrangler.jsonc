@@ -19,6 +19,9 @@
   "placement": {
     "mode": "smart"
   },
+  "secrets": {
+    "required": ["SESSION_SECRET", "PASSWORD_PEPPER"]
+  },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

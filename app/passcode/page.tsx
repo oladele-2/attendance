@@ -1,4 +1,3 @@
-import { submitPasscode } from "@/app/actions";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { IconBuilding, IconLock } from "@/components/icons";
@@ -23,7 +22,7 @@ export default async function PasscodePage({
         <h2 className="mb-2 text-2xl font-bold text-[#ff8002]">Facility Passcode</h2>
         <p className="mb-6 text-sm text-slate-500">Enter your hospital attendance passcode to continue.</p>
         {params.error ? <FlashBanner error={params.error} /> : null}
-        <form action={submitPasscode} className="flex flex-col gap-4" autoComplete="off">
+        <form action="/api/session/facility" method="post" className="flex flex-col gap-4" autoComplete="off">
           <label className="sr-only" htmlFor="facility_id">
             Passcode
           </label>

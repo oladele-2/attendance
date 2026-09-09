@@ -12,12 +12,28 @@ type DbCfg = {
 
 function readEnv(name: "SESSION_SECRET" | "PASSWORD_PEPPER" | "DATABASE_URL") {
   try {
-    const value = env[name];
-    if (typeof value === "string" && value.length > 0) return value;
+    // Static reads — avoid env[name] dynamic access.
+    if (name === "SESSION_SECRET") {
+      const value = env.SESSION_SECRET;
+      if (typeof value === "string" && value.length > 0) return value;
+    } else if (name === "PASSWORD_PEPPER") {
+      const value = env.PASSWORD_PEPPER;
+      if (typeof value === "string" && value.length > 0) return value;
+    } else if (name === "DATABASE_URL") {
+      const value = env.DATABASE_URL;
+      if (typeof value === "string" && value.length > 0) return value;
+    }
   } catch {
     // cloudflare:workers is unavailable in some middleware/build contexts
   }
   return process.env[name];
+}
+
+function secretsPresent() {
+  return {
+    hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
+    hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+  };
 }
 
 function tzOffset(): string {
@@ -115,6 +131,7 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
 
 /** Safe connectivity probe for production debugging (no secrets). */
 export async function probeDb() {
+  const secrets = secretsPresent();
   const cfg = fromHyperdrive() ?? fromDatabaseUrl();
   if (!cfg) {
     return {
@@ -124,8 +141,7 @@ export async function probeDb() {
       port: null,
       database: null,
       error: "Database is not configured. Set Hyperdrive or DATABASE_URL.",
-      hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
-      hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+      ...secrets,
     };
   }
 
@@ -147,8 +163,7 @@ export async function probeDb() {
         port: cfg.port,
         database: cfg.database,
         error: null,
-        hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
-        hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+        ...secrets,
       };
     } finally {
       await db.end();
@@ -161,8 +176,7 @@ export async function probeDb() {
       port: cfg.port,
       database: cfg.database,
       error: error instanceof Error ? error.message : String(error),
-      hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
-      hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+      ...secrets,
     };
   }
 }

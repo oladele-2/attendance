@@ -5,16 +5,21 @@ import type { SessionPayload } from "./types";
 
 const COOKIE = "attendance_session";
 
-function secretKey() {
+function sessionSecret() {
   let secret: string | undefined;
   try {
-    secret = env.SESSION_SECRET;
+    // Use static property access — some Workers tooling breaks env[name] dynamic reads.
+    const fromEnv = env.SESSION_SECRET;
+    if (typeof fromEnv === "string" && fromEnv.length > 0) secret = fromEnv;
   } catch {
     secret = undefined;
   }
-  secret = secret || process.env.SESSION_SECRET;
   if (!secret) {
-    throw new Error("SESSION_SECRET is not set");
+    const fromProcess = process.env.SESSION_SECRET;
+    if (typeof fromProcess === "string" && fromProcess.length > 0) secret = fromProcess;
+  }
+  if (!secret) {
+    throw new Error("SESSION_SECRET is not set on this Worker");
   }
   return new TextEncoder().encode(secret);
 }
@@ -24,13 +29,13 @@ export async function encryptSession(payload: SessionPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("14d")
-    .sign(secretKey());
+    .sign(sessionSecret());
 }
 
 export async function decryptSession(token: string | undefined | null): Promise<SessionPayload | null> {
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, secretKey());
+    const { payload } = await jwtVerify(token, sessionSecret());
     return payload as unknown as SessionPayload;
   } catch {
     return null;
@@ -49,7 +54,7 @@ export async function setSession(payload: SessionPayload) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
     maxAge: 60 * 60 * 24 * 14,
   });
 }
@@ -57,6 +62,11 @@ export async function setSession(payload: SessionPayload) {
 export async function clearSession() {
   const jar = await cookies();
   jar.delete(COOKIE);
+}
+
+export function sessionCookieHeader(token: string) {
+  const maxAge = 60 * 60 * 24 * 14;
+  return `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export function isAdmin(session: SessionPayload | null) {

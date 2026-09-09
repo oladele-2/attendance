@@ -31,5 +31,8 @@ export function errorMessage(code?: string) {
   if (code.startsWith("db:")) {
     return `Database error: ${code.slice(3)}`;
   }
+  if (code.startsWith("session:")) {
+    return `Session error: ${code.slice(8)}`;
+  }
   return ERROR_COPY[code] ?? decodeURIComponent(code);
 }
