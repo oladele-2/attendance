@@ -37,18 +37,28 @@ npm run deploy
 
 This app is meant to deploy from GitHub with [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
-1. Push this repo to GitHub (private is recommended).
-2. In the Cloudflare dashboard go to [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages) → **Create** → **Import a repository** → GitHub.
-3. Select this repository and branch `main`. The Worker name must stay `attendance-vinext` (same as `wrangler.jsonc`).
-4. Set:
-   - **Build command:** leave empty
-   - **Deploy command:** `npm run deploy`
-5. After the first connect, add runtime secrets under the Worker → **Settings** → **Variables and Secrets**:
-   - `SESSION_SECRET`
-   - `PASSWORD_PEPPER`
-6. Replace the placeholder Hyperdrive id in `wrangler.jsonc` with a real Hyperdrive (Cloudways MariaDB), commit, and push. Cloudflare will rebuild on each push to `main`.
+The Worker entry file is created by Vinext. If Cloudflare only runs `npx wrangler deploy`, you will get:
 
-Do not commit `.dev.vars` or database passwords.
+`The entry-point file at "vinext/server/fetch-handler" was not found.`
+
+In the Worker → **Settings** → **Build**:
+
+| Setting | Value |
+| --- | --- |
+| Build command | *(leave empty)* |
+| Deploy command | `npm run deploy` |
+| Non-production deploy | `npm run deploy -- --skip-build` is not needed; use `npx wrangler versions upload --config dist/server/wrangler.json` only if you first set **Build command** to `npm run build` |
+
+Recommended: empty build command, deploy command **`npm run deploy`**. That runs Vinext’s build, then Wrangler with `dist/server/wrangler.json`.
+
+The Worker name must stay `attendance-vinext` (same as `wrangler.jsonc`).
+
+After a successful first deploy, add runtime secrets under **Settings** → **Variables and Secrets**:
+
+- `SESSION_SECRET`
+- `PASSWORD_PEPPER`
+
+Replace the placeholder Hyperdrive id in `wrangler.jsonc` with a real Hyperdrive (Cloudways MariaDB), commit, and push. Do not commit `.dev.vars` or database passwords.
 
 ## Routes
 
