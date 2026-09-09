@@ -28,5 +28,8 @@ export function noticeMessage(code?: string) {
 
 export function errorMessage(code?: string) {
   if (!code) return "";
+  if (code.startsWith("db:")) {
+    return `Database error: ${code.slice(3)}`;
+  }
   return ERROR_COPY[code] ?? decodeURIComponent(code);
 }

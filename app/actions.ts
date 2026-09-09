@@ -32,17 +32,27 @@ export async function submitPasscode(formData: FormData) {
     fail("/passcode", "invalid-passcode");
   }
 
+  let facility;
   try {
-    const facility = await withDb((db) => getCompanyById(db, facilityId));
-    if (!facility) {
-      fail("/passcode", "invalid-passcode");
-    }
+    facility = await withDb((db) => getCompanyById(db, facilityId));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[passcode]", message);
+    // Temporary: surface the real failure so Cloudflare Logs / the URL show the cause.
+    fail("/passcode", `db:${message.slice(0, 160)}`);
+  }
+  if (!facility) {
+    fail("/passcode", "invalid-passcode");
+  }
+  try {
     await setSession({
       company_id: facility.id,
       company: facility.name,
     });
-  } catch {
-    fail("/passcode", "db");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[passcode-session]", message);
+    fail("/passcode", "session");
   }
   redirect("/scan");
 }

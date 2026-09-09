@@ -1,7 +1,14 @@
 import { env } from "cloudflare:workers";
 import { createConnection, type Connection, type RowDataPacket } from "mysql2/promise";
 
-type DbCfg = { host: string; user: string; password: string; database: string; port: number };
+type DbCfg = {
+  host: string;
+  user: string;
+  password: string;
+  database: string;
+  port: number;
+  connectionString?: string;
+};
 
 function readEnv(name: "SESSION_SECRET" | "PASSWORD_PEPPER" | "DATABASE_URL") {
   try {
@@ -30,9 +37,7 @@ function fromHyperdrive(): DbCfg | null {
   try {
     const hd = env.HYPERDRIVE;
     if (!hd || typeof hd.host !== "string" || hd.host.length === 0) return null;
-    // Local wrangler/Vinext mocks Hyperdrive as loopback. Prefer DATABASE_URL there.
-    // Production Hyperdrive also sometimes reports host "localhost" — still use it when
-    // DATABASE_URL is not set.
+    // Local mock Hyperdrive is loopback; prefer DATABASE_URL when that exists.
     if (isLoopback(hd.host) && readEnv("DATABASE_URL")) return null;
     return {
       host: hd.host,
@@ -40,6 +45,7 @@ function fromHyperdrive(): DbCfg | null {
       password: hd.password,
       database: hd.database,
       port: hd.port,
+      connectionString: typeof hd.connectionString === "string" ? hd.connectionString : undefined,
     };
   } catch {
     return null;
@@ -56,7 +62,19 @@ function fromDatabaseUrl(): DbCfg | null {
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.replace(/^\//, "")),
     port: Number(parsed.port || 3306),
+    connectionString: url,
   };
+}
+
+function describeSource(cfg: DbCfg) {
+  if (cfg.connectionString?.includes("hyperdrive") || !readEnv("DATABASE_URL") || !isLoopback(cfg.host)) {
+    try {
+      if (env.HYPERDRIVE) return "hyperdrive";
+    } catch {
+      /* ignore */
+    }
+  }
+  return "database_url";
 }
 
 export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> {
@@ -76,6 +94,7 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
     });
 
     try {
+      // Avoid mysql2 prepared-statement protocol; Hyperdrive MySQL rejects COM_STMT_PREPARE.
       await db.query(`SET time_zone = '${tzOffset()}'`);
       return await fn(db);
     } finally {
@@ -84,12 +103,67 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[db]", message, {
+      source: describeSource(cfg),
       host: cfg.host,
       port: cfg.port,
       database: cfg.database,
       user: cfg.user,
     });
     throw error;
+  }
+}
+
+/** Safe connectivity probe for production debugging (no secrets). */
+export async function probeDb() {
+  const cfg = fromHyperdrive() ?? fromDatabaseUrl();
+  if (!cfg) {
+    return {
+      ok: false as const,
+      source: null,
+      host: null,
+      port: null,
+      database: null,
+      error: "Database is not configured. Set Hyperdrive or DATABASE_URL.",
+      hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
+      hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+    };
+  }
+
+  try {
+    const db = await createConnection({
+      host: cfg.host,
+      user: cfg.user,
+      password: cfg.password,
+      database: cfg.database,
+      port: cfg.port,
+      disableEval: true,
+    });
+    try {
+      await db.query("SELECT 1 AS ok");
+      return {
+        ok: true as const,
+        source: describeSource(cfg),
+        host: cfg.host,
+        port: cfg.port,
+        database: cfg.database,
+        error: null,
+        hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
+        hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+      };
+    } finally {
+      await db.end();
+    }
+  } catch (error) {
+    return {
+      ok: false as const,
+      source: describeSource(cfg),
+      host: cfg.host,
+      port: cfg.port,
+      database: cfg.database,
+      error: error instanceof Error ? error.message : String(error),
+      hasSessionSecret: Boolean(readEnv("SESSION_SECRET")),
+      hasPasswordPepper: Boolean(readEnv("PASSWORD_PEPPER")),
+    };
   }
 }
 
