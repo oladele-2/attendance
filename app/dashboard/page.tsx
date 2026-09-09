@@ -146,7 +146,7 @@ export default async function DashboardPage({
                       <td className="px-3 py-3">
                         <span className="inline-flex items-center gap-1 text-slate-700">
                           <IconCalendar size={14} />
-                          {isoDateValue(attend.attendance_date)}
+                          {isoDateValue(attend.attendance_date ?? attend.check_in_time)}
                         </span>
                       </td>
                       <td className="px-3 py-3">{actionDate(attend.check_in_time)}</td>

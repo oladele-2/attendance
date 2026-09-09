@@ -50,7 +50,8 @@ export type PrivilegeRow = {
 export type AttendanceRow = {
   id: number;
   user_id: number;
-  attendance_date: string;
+  /** Derived from DATE(check_in_time) in queries — column removed from DB. */
+  attendance_date?: string | null;
   check_in_time: string | null;
   check_out_time: string | null;
   hospital_id: number;

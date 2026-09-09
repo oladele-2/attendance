@@ -29,7 +29,7 @@ export default async function EditAttendancePage({
   const attendance = await withDb((db) => getAttendanceById(db, Number(id)));
   if (!attendance || attendance.hospital_id !== session.company_id) notFound();
 
-  const attendanceDate = isoDateValue(attendance.attendance_date);
+  const attendanceDate = isoDateValue(attendance.check_in_time || attendance.attendance_date);
   const save = saveAttendanceEdit.bind(null, attendance.id);
 
   return (

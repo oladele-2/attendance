@@ -9,6 +9,12 @@ type SummaryRow = RowDataPacket & {
   total_minutes: number | null;
 };
 
+/** Day key for a row — always derived from check_in_time (no attendance_date column). */
+const DAY_EXPR = (alias = "") => {
+  const prefix = alias ? `${alias}.` : "";
+  return `DATE(${prefix}check_in_time)`;
+};
+
 export async function getCompanyById(db: Connection, id: number) {
   return queryOne<RowDataPacket & CompanyRow>(db, "SELECT * FROM `company` WHERE `id`=?", [id]);
 }
@@ -59,28 +65,59 @@ export async function getPrivilegeAtCompany(db: Connection, userId: number, comp
   );
 }
 
-export async function getDateAttendance(
-  db: Connection,
-  userId: number,
-  attendanceDate: string,
-  hospitalId?: number,
-) {
-  if (hospitalId) {
-    return queryOne<RowDataPacket & AttendanceRow>(
-      db,
-      "SELECT id, attendance_date, check_in_time, check_out_time, hospital_id FROM `attendance` WHERE user_id=? AND attendance_date=? AND hospital_id=?",
-      [userId, attendanceDate, hospitalId],
-    );
-  }
+/** Latest open shift for this staff at this facility (supports overnight + multi-shift days). */
+export async function getOpenAttendance(db: Connection, userId: number, hospitalId: number) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    "SELECT id, attendance_date, check_in_time, check_out_time, hospital_id FROM `attendance` WHERE user_id=? AND attendance_date=?",
-    [userId, attendanceDate],
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+     FROM \`attendance\`
+     WHERE user_id=? AND hospital_id=? AND check_in_time IS NOT NULL AND check_out_time IS NULL
+     ORDER BY check_in_time DESC
+     LIMIT 1`,
+    [userId, hospitalId],
   );
 }
 
+/** Most recent completed shift started today (for status messaging only). */
+export async function getLatestCompletedToday(
+  db: Connection,
+  userId: number,
+  hospitalId: number,
+  today: string,
+) {
+  return queryOne<RowDataPacket & AttendanceRow>(
+    db,
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+     FROM \`attendance\`
+     WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=? AND check_out_time IS NOT NULL
+     ORDER BY check_out_time DESC
+     LIMIT 1`,
+    [userId, hospitalId, today],
+  );
+}
+
+export async function countShiftsToday(
+  db: Connection,
+  userId: number,
+  hospitalId: number,
+  today: string,
+) {
+  const row = await queryOne<CountRow>(
+    db,
+    `SELECT COUNT(id) AS total FROM \`attendance\`
+     WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=?`,
+    [userId, hospitalId, today],
+  );
+  return Number(row?.total ?? 0);
+}
+
 export async function getAttendanceById(db: Connection, id: number) {
-  return queryOne<RowDataPacket & AttendanceRow>(db, "SELECT * FROM attendance WHERE id=?", [id]);
+  return queryOne<RowDataPacket & AttendanceRow>(
+    db,
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+     FROM attendance WHERE id=?`,
+    [id],
+  );
 }
 
 export async function staffPrivilegeCount(db: Connection, status: string, company: number) {
@@ -113,6 +150,7 @@ function attendanceFilter(
   alias = "",
 ) {
   const col = alias ? `${alias}.` : "";
+  const day = DAY_EXPR(alias);
   let sql = ` WHERE ${col}hospital_id=?`;
   const params: unknown[] = [company];
   if (staff) {
@@ -120,12 +158,12 @@ function attendanceFilter(
     params.push(staff);
   }
   if (date) {
-    sql += ` AND ${col}attendance_date=?`;
+    sql += ` AND ${day}=?`;
     params.push(date);
   }
   if (month) {
     const [year, mon] = month.split("-");
-    sql += ` AND YEAR(${col}attendance_date)=? AND MONTH(${col}attendance_date)=?`;
+    sql += ` AND YEAR(${day})=? AND MONTH(${day})=?`;
     params.push(Number(year), Number(mon));
   }
   return { sql, params };
@@ -157,9 +195,10 @@ export async function hospitalAttendance(
   month?: string | null,
 ) {
   const filter = attendanceFilter(company, staff, date, month, "a");
+  const day = DAY_EXPR("a");
   return queryAll<RowDataPacket & AttendanceRow>(
     db,
-    `SELECT a.id, a.user_id, a.attendance_date, a.check_in_time, a.check_out_time, a.status,
+    `SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
         u.first AS first_name, u.last AS last_name,
         CASE
             WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NULL THEN 'Void'
@@ -171,7 +210,7 @@ export async function hospitalAttendance(
     FROM attendance a
     LEFT JOIN user u ON u.user_id = a.user_id
     ${filter.sql}
-    ORDER BY a.attendance_date DESC
+    ORDER BY a.check_in_time DESC
     LIMIT ?,?`,
     [...filter.params, offset, limit],
   );
@@ -196,17 +235,11 @@ export async function hospitalAttendanceSummary(
   );
 }
 
-export async function insertCheckIn(
-  db: Connection,
-  userId: number,
-  attendanceDate: string,
-  hospitalId: number,
-) {
-  // Hyperdrive's MySQL path supports the text protocol used by query(), but not
-  // COM_STMT_PREPARE (which mysql2's execute() uses).
+export async function insertCheckIn(db: Connection, userId: number, hospitalId: number) {
+  // Hyperdrive MySQL supports query() text protocol, not COM_STMT_PREPARE.
   await db.query<ResultSetHeader>(
-    "INSERT INTO attendance (user_id, attendance_date, check_in_time, hospital_id) VALUES (?, ?, NOW(), ?)",
-    [userId, attendanceDate, hospitalId],
+    "INSERT INTO attendance (user_id, check_in_time, hospital_id, status) VALUES (?, NOW(), ?, 0)",
+    [userId, hospitalId],
   );
 }
 

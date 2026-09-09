@@ -3,9 +3,14 @@ import { FaceCapture } from "@/components/FaceCapture";
 import { FlashBanner } from "@/components/FlashBanner";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
-import { getDateAttendance, getUserById } from "@/lib/queries";
+import {
+  countShiftsToday,
+  getLatestCompletedToday,
+  getOpenAttendance,
+  getUserById,
+} from "@/lib/queries";
 import { actionDate } from "@/lib/dates";
-import { addDays, isoDate } from "@/lib/face";
+import { isoDate } from "@/lib/face";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
 
 function asText(value: unknown) {
@@ -24,41 +29,41 @@ export default async function VerificationPage({
   const session = await requireUser();
   const params = await searchParams;
   const today = isoDate();
-  const yesterday = addDays(today, -1);
 
   let user: { pre: string | null; phone: string | null } | null = null;
-  let attendance: {
-    check_in_time: string | null;
-    check_out_time: string | null;
-  } | null = null;
-  let source: "today" | "yesterday" = "today";
+  let openShift: { check_in_time: string; check_in_day: string } | null = null;
+  let lastCompleted: { check_in_time: string; check_out_time: string } | null = null;
+  let shiftsToday = 0;
   let loadError: string | undefined = params.error;
 
   try {
     const result = await withDb(async (db) => {
       const foundUser = await getUserById(db, session.user_id!);
-      let found = await getDateAttendance(db, session.user_id!, today, session.company_id);
-      let foundSource: "today" | "yesterday" = "today";
-      if (!found) {
-        const y = await getDateAttendance(db, session.user_id!, yesterday, session.company_id);
-        if (y?.check_in_time && !y.check_out_time) {
-          found = y;
-          foundSource = "yesterday";
-        }
-      }
-      return { foundUser, found, foundSource };
+      const open = await getOpenAttendance(db, session.user_id!, session.company_id);
+      const completed = await getLatestCompletedToday(db, session.user_id!, session.company_id, today);
+      const count = await countShiftsToday(db, session.user_id!, session.company_id, today);
+      return { foundUser, open, completed, count };
     });
 
     user = result.foundUser
       ? { pre: result.foundUser.pre, phone: result.foundUser.phone }
       : null;
-    attendance = result.found
-      ? {
-          check_in_time: asText(result.found.check_in_time) || null,
-          check_out_time: asText(result.found.check_out_time) || null,
-        }
-      : null;
-    source = result.foundSource;
+
+    if (result.open?.check_in_time) {
+      openShift = {
+        check_in_time: asText(result.open.check_in_time),
+        check_in_day: isoDate(new Date(result.open.check_in_time)),
+      };
+    }
+
+    if (result.completed?.check_in_time && result.completed.check_out_time) {
+      lastCompleted = {
+        check_in_time: asText(result.completed.check_in_time),
+        check_out_time: asText(result.completed.check_out_time),
+      };
+    }
+
+    shiftsToday = result.count;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[verification]", message);
@@ -69,22 +74,26 @@ export default async function VerificationPage({
   let statusClass = "bg-[#fff8e6] border-[#ffcc80] text-[#b36b00]";
   let buttonLabel = "Check-in";
   let canPunch = !loadError;
-  if (!loadError && attendance?.check_in_time && !attendance.check_out_time) {
-    const dayLabel = source === "yesterday" ? "Yesterday" : "Today";
-    statusMessage = `Checked in ${dayLabel} at ${actionDate(attendance.check_in_time)}. Don’t forget to check out.`;
-    if (source === "yesterday") statusMessage += " Night shift continuing from yesterday.";
-    statusClass = "bg-[#e6f7ff] border-[#80d4ff] text-[#006699]";
-    buttonLabel = "Check-out";
-  } else if (!loadError && attendance?.check_in_time && attendance.check_out_time) {
-    const dayLabel = source === "yesterday" ? "Yesterday" : "Today";
-    statusMessage = `Checked in ${dayLabel} at ${actionDate(attendance.check_in_time)} and out at ${actionDate(attendance.check_out_time)}. Have a great rest of your day!`;
-    statusClass = "bg-[#e6ffe6] border-[#80e680] text-[#267326]";
-    buttonLabel = "Done for today";
-    canPunch = false;
-  } else if (loadError) {
+
+  if (loadError) {
     statusMessage = "Attendance status could not be loaded.";
     statusClass = "bg-red-50 border-red-200 text-[#a40606]";
     buttonLabel = "Unavailable";
+  } else if (openShift) {
+    const dayLabel = openShift.check_in_day === today ? "today" : "on a previous day";
+    statusMessage = `Checked in ${dayLabel} at ${actionDate(openShift.check_in_time)}. Don’t forget to check out.`;
+    if (openShift.check_in_day < today) {
+      statusMessage += " Night shift still open.";
+    }
+    statusClass = "bg-[#e6f7ff] border-[#80d4ff] text-[#006699]";
+    buttonLabel = "Check-out";
+  } else if (lastCompleted) {
+    statusMessage = `Last shift: in at ${actionDate(lastCompleted.check_in_time)}, out at ${actionDate(lastCompleted.check_out_time)}. You can start another shift.`;
+    if (shiftsToday > 1) {
+      statusMessage += ` (${shiftsToday} shifts today)`;
+    }
+    statusClass = "bg-[#e6ffe6] border-[#80e680] text-[#267326]";
+    buttonLabel = "Check-in again";
   }
 
   return (
@@ -116,24 +125,43 @@ export default async function VerificationPage({
         </div>
 
         <div className={`mx-auto mb-6 flex max-w-xl items-start gap-2 rounded-xl border p-4 text-sm font-medium ${statusClass}`}>
-          {canPunch ? <IconClock className="mt-0.5 shrink-0" size={18} /> : <IconCheck className="mt-0.5 shrink-0" size={18} />}
+          {openShift || loadError ? (
+            <IconClock className="mt-0.5 shrink-0" size={18} />
+          ) : (
+            <IconCheck className="mt-0.5 shrink-0" size={18} />
+          )}
           <p>{statusMessage}</p>
         </div>
 
-        <DirectMarkButton label={buttonLabel} disabled={!canPunch} />
+        <DirectMarkButton
+          label={buttonLabel}
+          disabled={!canPunch}
+          disabledReason={
+            loadError
+              ? "Fix the database error above, then refresh this page to mark attendance."
+              : undefined
+          }
+        />
 
         <div className="border-t border-slate-200 pt-6">
           <h2 className="mb-1 flex items-center justify-center gap-2 text-lg font-semibold text-slate-700">
             <IconCamera size={18} />
             Or use face recognition
           </h2>
-          <p className="mb-4 text-center text-sm text-slate-500">Optional. Look at the camera, then tap the face button.</p>
+          <p className="mb-4 text-center text-sm text-slate-500">
+            Optional. Look at the camera, then tap the face button.
+          </p>
           <FaceCapture
             mode="verify"
             endpoint="/api/verify-face"
-            buttonLabel={`Mark with face`}
+            buttonLabel={openShift ? "Check-out with face" : "Check-in with face"}
             requireFace
             disabled={!canPunch}
+            disabledReason={
+              loadError
+                ? "Fix the database error above, then refresh this page."
+                : undefined
+            }
           />
         </div>
       </div>

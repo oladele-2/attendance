@@ -16,6 +16,7 @@ type Props = {
   buttonLabel: string;
   requireFace?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
 };
 
 export function FaceCapture({
@@ -25,6 +26,7 @@ export function FaceCapture({
   buttonLabel,
   requireFace = true,
   disabled = false,
+  disabledReason,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -221,7 +223,9 @@ export function FaceCapture({
         {busy ? "Please wait..." : buttonLabel}
       </button>
       {disabled ? (
-        <p className="mt-2 text-center text-xs text-slate-500">Face check-in is unavailable because this shift is already complete.</p>
+        <p className="mt-2 text-center text-xs text-slate-500">
+          {disabledReason || "Face marking is unavailable right now."}
+        </p>
       ) : requireFace && !faceReady ? (
         <p className="mt-2 text-center text-xs text-slate-500">The face button turns on when a face is clearly in view.</p>
       ) : null}

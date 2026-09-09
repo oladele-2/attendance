@@ -6,14 +6,15 @@ import { IconCheck, IconClock, IconLogIn, IconLogOut } from "./icons";
 type Props = {
   label: string;
   disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function DirectMarkButton({ label, disabled = false }: Props) {
+export function DirectMarkButton({ label, disabled = false, disabledReason }: Props) {
   const [status, setStatus] = useState("");
   const [ok, setOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const isOut = label.toLowerCase().includes("out");
-  const isDone = disabled;
+  const isDone = disabled && /done|unavailable/i.test(label);
 
   async function mark() {
     setBusy(true);
@@ -56,6 +57,12 @@ export function DirectMarkButton({ label, disabled = false }: Props) {
     }
   }
 
+  const helper =
+    disabledReason ??
+    (disabled && /done/i.test(label)
+      ? "You already completed this shift. A CEO can edit the record if needed."
+      : null);
+
   return (
     <div className="mb-8 text-center">
       <button
@@ -67,9 +74,7 @@ export function DirectMarkButton({ label, disabled = false }: Props) {
         {isDone ? <IconCheck /> : isOut ? <IconLogOut /> : <IconLogIn />}
         {busy ? "Please wait..." : label}
       </button>
-      {disabled ? (
-        <p className="mt-3 text-sm text-slate-500">You already completed this shift. A CEO can edit the record if needed.</p>
-      ) : null}
+      {helper ? <p className="mt-3 text-sm text-slate-500">{helper}</p> : null}
       {status ? (
         <p
           className={`mt-3 flex items-center justify-center gap-1 text-sm ${
