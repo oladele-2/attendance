@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies } from "next/headers";
 import type { SessionPayload } from "./types";
 
-const COOKIE = "attendance_session";
+export const COOKIE = "attendance_session";
 
 function sessionSecret() {
   let secret: string | undefined;

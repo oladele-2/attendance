@@ -9,15 +9,14 @@ import {
   getOpenAttendance,
   getUserById,
 } from "@/lib/queries";
-import { actionDate } from "@/lib/dates";
+import { actionDate, parseDateTime } from "@/lib/dates";
 import { isoDate } from "@/lib/face";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
 
 function asText(value: unknown) {
   if (value == null) return "";
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? "" : value.toISOString();
-  }
+  const parsed = parseDateTime(value);
+  if (parsed) return parsed.toISOString();
   return String(value);
 }
 
@@ -52,7 +51,7 @@ export default async function VerificationPage({
     if (result.open?.check_in_time) {
       openShift = {
         check_in_time: asText(result.open.check_in_time),
-        check_in_day: isoDate(new Date(result.open.check_in_time)),
+        check_in_day: isoDate(result.open.check_in_time),
       };
     }
 

@@ -9,6 +9,35 @@ declare global {
   }
 }
 
+type FaceApi = {
+  nets: {
+    tinyFaceDetector: { loadFromUri: (u: string) => Promise<void> };
+    faceLandmark68Net: { loadFromUri: (u: string) => Promise<void> };
+    faceRecognitionNet: { loadFromUri: (u: string) => Promise<void> };
+  };
+  TinyFaceDetectorOptions: new (o: { inputSize: number; scoreThreshold: number }) => unknown;
+  detectSingleFace: (
+    el: HTMLVideoElement,
+    opts: unknown,
+  ) => {
+    withFaceLandmarks: () => {
+      withFaceDescriptor: () => Promise<
+        | {
+            descriptor: Float32Array;
+            detection: { score: number };
+          }
+        | undefined
+      >;
+    };
+  };
+  matchDimensions: (canvas: HTMLCanvasElement, size: { width: number; height: number }) => void;
+  resizeResults: (d: unknown, size: { width: number; height: number }) => unknown;
+  draw: {
+    drawDetections: (c: HTMLCanvasElement, d: unknown) => void;
+    drawFaceLandmarks: (c: HTMLCanvasElement, d: unknown) => void;
+  };
+};
+
 type Props = {
   mode: "verify" | "register";
   endpoint: string;
@@ -30,20 +59,45 @@ export function FaceCapture({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const [cameraOn, setCameraOn] = useState(false);
   const [status, setStatus] = useState(
-    requireFace ? "Loading face models..." : "You can mark attendance now. Camera is optional.",
+    "Camera is off. Use Check-in / Check-out, or open the camera for face recognition.",
   );
   const [faceReady, setFaceReady] = useState(false);
   const [ok, setOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const descriptorRef = useRef<number[] | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
+  const streamRef = useRef<MediaStream | undefined>(undefined);
+  const cancelledRef = useRef(false);
+
+  function stopCamera() {
+    cancelledRef.current = true;
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = undefined;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = undefined;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    descriptorRef.current = null;
+    setFaceReady(false);
+    setCameraOn(false);
+    setStatus("Camera is off. Use Check-in / Check-out, or open the camera for face recognition.");
+  }
 
   useEffect(() => {
-    let timer: number | undefined;
-    let stream: MediaStream | undefined;
-    let cancelled = false;
+    return () => {
+      cancelledRef.current = true;
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
-    async function boot() {
+  async function openCamera() {
+    cancelledRef.current = false;
+    setCameraOn(true);
+    setOk(null);
+    setStatus("Loading face models...");
+    try {
       await new Promise<void>((resolve, reject) => {
         if (document.querySelector("script[data-face-api]")) {
           resolve();
@@ -57,29 +111,7 @@ export function FaceCapture({
         document.body.appendChild(script);
       });
 
-      const faceapi = window.faceapi as {
-        nets: {
-          tinyFaceDetector: { loadFromUri: (u: string) => Promise<void> };
-          faceLandmark68Net: { loadFromUri: (u: string) => Promise<void> };
-          faceRecognitionNet: { loadFromUri: (u: string) => Promise<void> };
-        };
-        TinyFaceDetectorOptions: new (o: { inputSize: number; scoreThreshold: number }) => unknown;
-        detectSingleFace: (el: HTMLVideoElement, opts: unknown) => {
-          withFaceLandmarks: () => {
-            withFaceDescriptor: () => Promise<{
-              descriptor: Float32Array;
-              detection: { score: number };
-            } | undefined>;
-          };
-        };
-        matchDimensions: (canvas: HTMLCanvasElement, size: { width: number; height: number }) => void;
-        resizeResults: (d: unknown, size: { width: number; height: number }) => unknown;
-        draw: {
-          drawDetections: (c: HTMLCanvasElement, d: unknown) => void;
-          drawFaceLandmarks: (c: HTMLCanvasElement, d: unknown) => void;
-        };
-      };
-
+      const faceapi = window.faceapi as FaceApi;
       const models = "https://di.ajirmed.com/models";
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(models),
@@ -87,13 +119,17 @@ export function FaceCapture({
         faceapi.nets.faceRecognitionNet.loadFromUri(models),
       ]);
 
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      if (!videoRef.current || cancelled) return;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      streamRef.current = stream;
+      if (!videoRef.current || cancelledRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
       setStatus("Look at the camera");
 
-      timer = window.setInterval(async () => {
+      timerRef.current = window.setInterval(async () => {
         const video = videoRef.current;
         const overlay = overlayRef.current;
         if (!video || !overlay || video.readyState < 2) return;
@@ -121,10 +157,9 @@ export function FaceCapture({
           setStatus(requireFace ? "No face detected." : "No face detected. You can still mark attendance.");
         }
       }, 120);
-    }
-
-    boot().catch((err: unknown) => {
+    } catch (err: unknown) {
       console.error(err);
+      stopCamera();
       setOk(false);
       const name = err instanceof DOMException ? err.name : "";
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
@@ -140,14 +175,8 @@ export function FaceCapture({
           ? "Cannot start the camera or load face models. Use Check-in / Check-out, or try another browser."
           : "Camera unavailable. You can still mark attendance with Check-in / Check-out.",
       );
-    });
-
-    return () => {
-      cancelled = true;
-      if (timer) window.clearInterval(timer);
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [requireFace]);
+    }
+  }
 
   async function submit() {
     if (requireFace && !descriptorRef.current) {
@@ -172,7 +201,7 @@ export function FaceCapture({
         setOk(false);
         setStatus(data.message || "Your session expired. Please sign in again.");
         setTimeout(() => {
-          window.location.href = "/scan";
+          window.location.href = "/signin";
         }, 1200);
         return;
       }
@@ -184,6 +213,7 @@ export function FaceCapture({
       if (data.success) {
         setOk(true);
         setStatus(data.message || "Done");
+        stopCamera();
         if (mode === "verify") {
           setTimeout(() => window.location.reload(), 800);
         }
@@ -201,10 +231,12 @@ export function FaceCapture({
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center">
-      <div className="relative overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-900 shadow-inner">
-        <video ref={videoRef} className="h-auto w-80" autoPlay muted playsInline />
-        <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
-      </div>
+      {cameraOn ? (
+        <div className="relative overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-900 shadow-inner">
+          <video ref={videoRef} className="h-auto w-80" autoPlay muted playsInline />
+          <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+        </div>
+      ) : null}
       <p
         className={`mt-3 flex items-center gap-2 text-center text-sm ${
           ok === false ? "text-[#a40606]" : ok === true ? "text-green-700" : "text-slate-600"
@@ -213,6 +245,20 @@ export function FaceCapture({
         {ok === false ? <IconAlert size={16} /> : <IconCamera size={16} />}
         {status}
       </p>
+      {cameraOn ? (
+        <button type="button" onClick={stopCamera} className="mt-2 text-sm font-semibold text-slate-600 hover:text-[#a40606]">
+          Close camera
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => void openCamera()}
+          className="mt-2 text-sm font-semibold text-[#ff8002] hover:underline disabled:text-slate-400"
+        >
+          Open camera for face recognition
+        </button>
+      )}
       <button
         type="button"
         disabled={disabled || busy || (requireFace && !faceReady)}
@@ -226,7 +272,7 @@ export function FaceCapture({
         <p className="mt-2 text-center text-xs text-slate-500">
           {disabledReason || "Face marking is unavailable right now."}
         </p>
-      ) : requireFace && !faceReady ? (
+      ) : requireFace && cameraOn && !faceReady ? (
         <p className="mt-2 text-center text-xs text-slate-500">The face button turns on when a face is clearly in view.</p>
       ) : null}
     </div>

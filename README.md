@@ -54,6 +54,8 @@ In the Worker → **Settings** → **Build**:
 
 Recommended: empty build command, deploy command **`npm run deploy`**. That runs Vinext’s build, then Wrangler with `dist/server/wrangler.json`.
 
+Pin **Node.js 22** in Workers Builds (Environment variables / Build → Node.js version). This app’s `engines.node` and `.node-version` are `>=22` / `22`. Vinext is pinned in `package.json` as `vinext@1.0.0-beta.9` and `@vinext/cloudflare@1.0.0-beta.7` so Cloudflare does not pick a different beta.
+
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
 ### Secrets (Build variables vs Worker secrets)

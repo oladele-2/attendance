@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { AppShell } from "@/components/AppShell";
 import "./globals.css";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "AjirMed Attendance",
@@ -8,7 +11,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  await connection();
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#f4f4f4] text-slate-800 antialiased">

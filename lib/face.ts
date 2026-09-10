@@ -1,3 +1,5 @@
+import { parseDateTime } from "./dates";
+
 export const FACE_THRESHOLD = 0.4;
 
 export function normalizeVector(vector: number[]) {
@@ -27,8 +29,11 @@ export function parseFaceVector(raw: string): number[] | null {
   }
 }
 
-export function isoDate(d = new Date()) {
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+export function isoDate(d: Date | string | number | null | undefined = new Date()) {
+  const date = parseDateTime(d);
+  if (!date) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  if (Number.isNaN(local.getTime())) return "";
   return local.toISOString().slice(0, 10);
 }
 

@@ -1,7 +1,41 @@
-function asDate(value: string | Date | null | undefined): Date | null {
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** Parse MySQL DATETIME / Date / ISO without throwing on Workers. */
+export function parseDateTime(value: unknown): Date | null {
   if (value == null || value === "") return null;
-  const date = value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const raw = String(value).trim();
+  if (!raw || raw === "[object Object]") return null;
+  const mysql = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (mysql) {
+    const date = new Date(`${mysql[1]}T${mysql[2]}`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function asDate(value: string | Date | null | undefined): Date | null {
+  return parseDateTime(value);
 }
 
 function pad2(n: number) {
@@ -45,13 +79,19 @@ export function actionDate(value: string | Date | null | undefined) {
 }
 
 export function formatLongDate(iso: string) {
-  const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+  const match = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return iso;
+  const month = MONTHS[Number(match[2]) - 1];
+  if (!month) return iso;
+  return `${Number(match[3])} ${month} ${match[1]}`;
 }
 
 export function formatMonthTitle(month: string) {
-  const d = new Date(`${month}-01T00:00:00`);
-  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const match = String(month).match(/^(\d{4})-(\d{2})/);
+  if (!match) return month;
+  const name = MONTHS[Number(match[2]) - 1];
+  if (!name) return month;
+  return `${name} ${match[1]}`;
 }
 
 export function minutesToHm(total: number | null | undefined) {
@@ -63,10 +103,7 @@ export function isoDateValue(value: string | Date | null | undefined) {
   if (!value) return "";
   const match = String(value).match(/(\d{4}-\d{2}-\d{2})/);
   if (match) return match[1];
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const date = parseDateTime(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }

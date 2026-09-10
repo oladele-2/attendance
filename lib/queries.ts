@@ -36,10 +36,11 @@ export async function getUserByEmail(db: Connection, email: string) {
 }
 
 export async function getUserByPhone(db: Connection, phone: string) {
+  const digits = phone.replace(/\D/g, "");
   return queryOne<RowDataPacket & UserRow>(
     db,
-    "SELECT * FROM `user` WHERE CONCAT(`pre`,`phone`)=?",
-    [phone],
+    "SELECT * FROM `user` WHERE CONCAT(`pre`,`phone`)=? OR CONCAT('+',`pre`,`phone`)=? OR `phone`=? LIMIT 1",
+    [digits, phone, digits],
   );
 }
 
@@ -135,10 +136,12 @@ export async function staffPrivilegePage(
   offset: number,
   limit: number,
 ) {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = Math.max(1, Number(limit) || 10);
   return queryAll<RowDataPacket & { user_id: number }>(
     db,
-    "SELECT `user_id` FROM `privilege` WHERE `status`=? AND `company`=? LIMIT ?,?",
-    [status, company, offset, limit],
+    `SELECT \`user_id\` FROM \`privilege\` WHERE \`status\`=? AND \`company\`=? LIMIT ${safeOffset},${safeLimit}`,
+    [status, company],
   );
 }
 
@@ -194,6 +197,8 @@ export async function hospitalAttendance(
   date?: string | null,
   month?: string | null,
 ) {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = Math.max(1, Number(limit) || 20);
   const filter = attendanceFilter(company, staff, date, month, "a");
   const day = DAY_EXPR("a");
   return queryAll<RowDataPacket & AttendanceRow>(
@@ -211,8 +216,8 @@ export async function hospitalAttendance(
     LEFT JOIN user u ON u.user_id = a.user_id
     ${filter.sql}
     ORDER BY a.check_in_time DESC
-    LIMIT ?,?`,
-    [...filter.params, offset, limit],
+    LIMIT ${safeOffset},${safeLimit}`,
+    filter.params,
   );
 }
 

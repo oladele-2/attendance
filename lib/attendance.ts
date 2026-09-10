@@ -18,7 +18,7 @@ export async function punchAttendance(
   if (open?.check_in_time && !open.check_out_time) {
     await updateCheckOut(db, 1, open.id);
     await updatePrivilegeStatus(db, "DISAPPROVED", privilegeId);
-    const checkInDay = isoDate(new Date(open.check_in_time));
+    const checkInDay = isoDate(open.check_in_time);
     const today = isoDate();
     const note = checkInDay < today ? " (Night shift from a previous day)" : "";
     return { success: true as const, action: "Checked out", note };

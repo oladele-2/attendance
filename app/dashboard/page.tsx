@@ -29,13 +29,28 @@ export default async function DashboardPage({
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  const { rows, total, summary, staffName } = await withDb(async (db) => {
-    const total = await hospitalAttendanceCount(db, session.company_id, staff, date, month);
-    const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, date, month);
-    const summary = await hospitalAttendanceSummary(db, session.company_id, staff, date, month);
-    const staffName = staff ? await getUserById(db, staff) : null;
-    return { rows, total, summary, staffName };
-  });
+  let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
+  let total = 0;
+  let summary: Awaited<ReturnType<typeof hospitalAttendanceSummary>> = null;
+  let staffName: Awaited<ReturnType<typeof getUserById>> = null;
+  let loadError = params.error;
+  try {
+    const result = await withDb(async (db) => {
+      const total = await hospitalAttendanceCount(db, session.company_id, staff, date, month);
+      const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, date, month);
+      const summary = await hospitalAttendanceSummary(db, session.company_id, staff, date, month);
+      const staffName = staff ? await getUserById(db, staff) : null;
+      return { rows, total, summary, staffName };
+    });
+    rows = result.rows;
+    total = result.total;
+    summary = result.summary;
+    staffName = result.staffName;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[dashboard]", message);
+    loadError = `db:${message.slice(0, 160)}`;
+  }
 
   const pages = Math.max(1, Math.ceil(total / limit));
   let title = "Attendance report";
@@ -62,7 +77,7 @@ export default async function DashboardPage({
             <p className="text-sm text-slate-500">{total} record{total === 1 ? "" : "s"}</p>
           </div>
         </div>
-        <FlashBanner notice={params.notice || params.msg} error={params.error} />
+        <FlashBanner notice={params.notice || params.msg} error={loadError} />
 
         <form method="get" className="mb-6 grid gap-3 rounded-xl bg-slate-50 p-4 md:grid-cols-4">
           <input
