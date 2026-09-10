@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import {
+  facilityStaffOptions,
   getUserName,
   hospitalAttendance,
   hospitalAttendanceCount,
@@ -9,9 +10,11 @@ import {
 } from "@/lib/queries";
 import { actionDate, formatLongDate, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
 import { isoDate } from "@/lib/face";
+import { attendanceExportPath } from "@/lib/report-csv";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { FlashBanner } from "@/components/FlashBanner";
-import { IconCalendar, IconChart, IconCheck, IconClock, IconFilter, IconPencil, IconUsers, IconXCircle } from "@/components/icons";
+import { StaffPicker } from "@/components/StaffPicker";
+import { IconCalendar, IconChart, IconCheck, IconClock, IconDownload, IconFilter, IconPencil, IconUsers, IconXCircle } from "@/components/icons";
 
 export default async function DashboardPage({
   searchParams,
@@ -24,7 +27,7 @@ export default async function DashboardPage({
   let staff = params.staff ? Number(params.staff) : undefined;
   if (!admin) staff = session.user_id;
   const month = params.month || undefined;
-  const date = !params.date && !month ? isoDate() : params.date || undefined;
+  const date = month ? undefined : !params.date ? isoDate() : params.date || undefined;
   const page = Math.max(1, Number(params.page || 1));
   const limit = 20;
   const offset = (page - 1) * limit;
@@ -33,6 +36,7 @@ export default async function DashboardPage({
   let total = 0;
   let summary: Awaited<ReturnType<typeof hospitalAttendanceSummary>> = null;
   let staffName: Awaited<ReturnType<typeof getUserName>> = null;
+  let staffOptions: Awaited<ReturnType<typeof facilityStaffOptions>> = [];
   let loadError = params.error;
   try {
     const result = await withDb(async (db) => {
@@ -40,12 +44,14 @@ export default async function DashboardPage({
       const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, date, month);
       const summary = await hospitalAttendanceSummary(db, session.company_id, staff, date, month);
       const staffName = staff ? await getUserName(db, staff) : null;
-      return { rows, total, summary, staffName };
+      const staffOptions = admin ? await facilityStaffOptions(db, session.company_id) : [];
+      return { rows, total, summary, staffName, staffOptions };
     });
     rows = result.rows;
     total = result.total;
     summary = result.summary;
     staffName = result.staffName;
+    staffOptions = result.staffOptions;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[dashboard]", message);
@@ -69,28 +75,45 @@ export default async function DashboardPage({
   const nextQuery = new URLSearchParams(query);
   nextQuery.set("page", String(page + 1));
 
+  const csvHref = attendanceExportPath({ staff, date, month, format: "csv" });
+  const excelHref = attendanceExportPath({ staff, date, month, format: "excel" });
+  const selfName = `${session.first ?? ""} ${session.last ?? ""}`.trim();
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-7">
-        <div className="mb-6 flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002]">
-            <IconChart />
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
-            <p className="text-sm text-slate-500">{total} record{total === 1 ? "" : "s"}</p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002]">
+              <IconChart />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">{title}</h1>
+              <p className="text-sm text-slate-500">{total} record{total === 1 ? "" : "s"}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={csvHref}
+              className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+            >
+              <IconDownload size={16} /> CSV
+            </a>
+            <a
+              href={excelHref}
+              className="inline-flex items-center gap-1 rounded-xl bg-[#fff4ea] px-3 py-2 text-sm font-semibold text-[#d98324] hover:bg-[#ff8002] hover:text-white"
+            >
+              <IconDownload size={16} /> Excel
+            </a>
           </div>
         </div>
         <FlashBanner notice={params.notice || params.msg} error={loadError} />
 
         <form method="get" className="mb-6 grid gap-3 rounded-xl bg-slate-50 p-4 md:grid-cols-4">
-          <input
-            type="number"
-            name="staff"
-            placeholder="Staff ID"
-            defaultValue={staff ?? ""}
-            readOnly={!admin}
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2.5"
+          <StaffPicker
+            options={staffOptions}
+            value={staff}
+            readOnlyName={admin ? undefined : selfName || "Your records"}
           />
           <input type="date" name="date" defaultValue={date ?? ""} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5" />
           <input type="month" name="month" defaultValue={month ?? ""} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5" />

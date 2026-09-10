@@ -33,7 +33,7 @@ export default async function StaffPage({
           </span>
           <div>
             <h1 className="text-2xl font-bold text-slate-800">{session.company} staff</h1>
-            <p className="text-sm text-slate-500">{total} people with access at this facility</p>
+            <p className="text-sm text-slate-500">{total} employees (patients are hidden)</p>
           </div>
         </div>
         <Link

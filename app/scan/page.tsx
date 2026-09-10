@@ -1,4 +1,5 @@
 import { QrScanner } from "@/components/QrScanner";
+import { PwaInstallHint } from "@/components/PwaInstallHint";
 import { requireFacility } from "@/lib/guards";
 import { redirect } from "next/navigation";
 import { IconLogIn, IconQr } from "@/components/icons";
@@ -17,6 +18,7 @@ export default async function ScanPage() {
           <h1 className="text-2xl font-bold text-slate-800">{session.company}</h1>
           <p className="mt-1 text-sm text-slate-500">Scan your staff QR code to sign in</p>
         </div>
+        <PwaInstallHint show />
         <QrScanner />
         <a
           href="/signin"

@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   IconChart,
+  IconClock,
   IconClose,
   IconHome,
   IconLogIn,
@@ -32,6 +33,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
     { href: "/scan", label: "QR login", icon: IconQr, show: !loggedIn },
     { href: "/signin", label: "Sign in", icon: IconLogIn, show: !loggedIn },
     { href: "/dashboard", label: "Performance", icon: IconChart, show: loggedIn },
+    { href: "/hours", label: "My hours", icon: IconClock, show: loggedIn },
     { href: "/staff", label: "Staff", icon: IconUsers, show: admin },
     { href: "/verification", label: "Mark", icon: IconScanFace, show: loggedIn },
     { href: "/qrcodes", label: "Codes", icon: IconQr, show: admin },

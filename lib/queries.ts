@@ -186,8 +186,10 @@ export async function staffPrivilegePage(
 export async function companyStaffCount(db: Connection, company: number) {
   const row = await queryOne<CountRow>(
     db,
-    `${FRESH_READ} SELECT COUNT(*) AS total FROM \`privilege\` WHERE \`company\`=?`,
-    [company],
+    `${FRESH_READ} SELECT COUNT(*) AS total FROM \`privilege\` p
+     WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
+       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'`,
+    [company, "Staff", "DISAPPROVED"],
   );
   return Number(row?.total ?? 0);
 }
@@ -216,8 +218,24 @@ export async function companyStaffPage(db: Connection, company: number, offset: 
         IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
      FROM \`privilege\` p
      LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
-     WHERE p.\`company\`=? ORDER BY p.\`id\` DESC LIMIT ${safeOffset},${safeLimit}`,
-    [company],
+     WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
+       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'
+     ORDER BY u.\`last\`, u.\`first\` LIMIT ${safeOffset},${safeLimit}`,
+    [company, "Staff", "DISAPPROVED"],
+  );
+}
+
+export async function facilityStaffOptions(db: Connection, company: number) {
+  return queryAll<RowDataPacket & { user_id: number; first: string | null; last: string | null }>(
+    db,
+    `${FRESH_READ} SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, u.\`first\`, u.\`last\`
+     FROM \`privilege\` p
+     LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
+     WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
+       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'
+     ORDER BY u.\`last\`, u.\`first\`
+     LIMIT 500`,
+    [company, "Staff", "DISAPPROVED"],
   );
 }
 
@@ -231,9 +249,10 @@ export async function getFacilityStaffProfile(db: Connection, ref: string, compa
         IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
      FROM \`user\` u
      INNER JOIN \`privilege\` p ON CAST(TRIM(p.\`user_id\`) AS UNSIGNED) = u.\`user_id\` AND p.\`company\`=?
+       AND (p.\`status\`=? OR p.\`status\`=?) AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'
      WHERE ${byId ? "u.`user_id`=?" : "u.`friendly`=?"}
      LIMIT 1`,
-    [company, byId ? Number(ref) : ref],
+    [company, "Staff", "DISAPPROVED", byId ? Number(ref) : ref],
   );
 }
 
@@ -330,14 +349,13 @@ function attendanceFilter(
     sql += ` AND ${col}user_id=?`;
     params.push(staff);
   }
-  if (date) {
-    sql += ` AND ${day}=?`;
-    params.push(date);
-  }
   if (month) {
     const [year, mon] = month.split("-");
     sql += ` AND YEAR(${day})=? AND MONTH(${day})=?`;
     params.push(Number(year), Number(mon));
+  } else if (date) {
+    sql += ` AND ${day}=?`;
+    params.push(date);
   }
   return { sql, params };
 }

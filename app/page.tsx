@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/guards";
-import { IconChart, IconQr, IconScanFace, IconUsers } from "@/components/icons";
+import { IconChart, IconClock, IconQr, IconScanFace, IconUsers } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
 
 export default async function HomePage({
@@ -29,6 +29,12 @@ export default async function HomePage({
         ]
       : []),
     {
+      href: "/hours",
+      title: "My hours",
+      body: "This month’s shifts and export",
+      icon: IconClock,
+    },
+    {
       href: "/verification",
       title: "Mark Attendance",
       body: "Check in or out, with or without face",
@@ -54,7 +60,7 @@ export default async function HomePage({
         <p className="mt-2 text-slate-600">Choose what you want to do.</p>
       </div>
       <FlashBanner notice={params.notice} error={params.error} className="mx-auto mb-6 max-w-xl" />
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <a
             key={card.href}

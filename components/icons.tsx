@@ -198,6 +198,13 @@ export const IconSave = (p: IconProps) => (
     <path d="M8 19v-6h8v6" />
   </Svg>
 );
+export const IconDownload = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 4v12" />
+    <path d="m7 12 5 5 5-5" />
+    <path d="M5 20h14" />
+  </Svg>
+);
 export const IconXCircle = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />

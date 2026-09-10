@@ -107,3 +107,14 @@ export function isoDateValue(value: string | Date | null | undefined) {
   if (!date) return "";
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
+
+export function clockTimeValue(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const match = String(value).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return "";
+  return `${match[1].padStart(2, "0")}:${match[2]}${match[3] ? `:${match[3]}` : ""}`;
+}
+
+export function currentMonthIso(value: Date = new Date()) {
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}`;
+}
