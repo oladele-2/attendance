@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { QrScanner } from "@/components/QrScanner";
 import { requireFacility } from "@/lib/guards";
 import { redirect } from "next/navigation";
@@ -19,13 +18,16 @@ export default async function ScanPage() {
           <p className="mt-1 text-sm text-slate-500">Scan your staff QR code to sign in</p>
         </div>
         <QrScanner />
-        <Link
+        <a
           href="/signin"
           className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200"
         >
           <IconLogIn size={16} />
           Use email or phone instead
-        </Link>
+        </a>
+        <a href="/forget-facility" className="mt-4 block text-center text-xs text-slate-400 hover:text-slate-600">
+          Not this hospital?
+        </a>
       </div>
     </main>
   );

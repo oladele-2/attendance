@@ -7,12 +7,10 @@ import {
 } from "@/lib/auth";
 import { withDb } from "@/lib/db";
 import { getCompanyById, getUserByEmail, getUserByPhone, getUserPrivileges } from "@/lib/queries";
-import { decryptSession, encryptSession, sessionCookieHeader } from "@/lib/session";
+import { sessionFromCookieHeader, facilityCookieHeader, userCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(/(?:^|;\s*)attendance_session=([^;]+)/);
-  const session = await decryptSession(match ? decodeURIComponent(match[1]) : null);
+  const session = await sessionFromCookieHeader(request.headers.get("cookie"));
   if (!session?.company_id) {
     return Response.redirect(new URL("/passcode?error=session", request.url), 303);
   }
@@ -56,22 +54,19 @@ export async function POST(request: Request) {
       return Response.redirect(new URL("/signin?error=no-access", request.url), 303);
     }
 
-    const token = await encryptSession({
+    const next = {
       ...session,
       user_id: user.user_id,
       first: user.first,
       last: user.last,
       privilege: privileges.privilege,
       privilege_id: privileges.id,
-    });
-
-    return new Response(null, {
-      status: 303,
-      headers: {
-        Location: "/verification",
-        "Set-Cookie": sessionCookieHeader(token),
-      },
-    });
+    };
+    const headers = new Headers();
+    headers.set("Location", "/verification");
+    headers.append("Set-Cookie", await facilityCookieHeader(next));
+    headers.append("Set-Cookie", await userCookieHeader(next));
+    return new Response(null, { status: 303, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[password-session]", message);

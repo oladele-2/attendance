@@ -2,16 +2,10 @@ import { withDb } from "@/lib/db";
 import { getUserById } from "@/lib/queries";
 import { punchAttendance } from "@/lib/attendance";
 import { euclideanDistance, FACE_THRESHOLD, normalizeVector, parseFaceVector } from "@/lib/face";
-import { decryptSession, encryptSession, sessionCookieHeader } from "@/lib/session";
-
-function readSessionCookie(request: Request) {
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(/(?:^|;\s*)attendance_session=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
+import { sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
-  const session = await decryptSession(readSessionCookie(request));
+  const session = await sessionFromCookieHeader(request.headers.get("cookie"));
   if (!session?.user_id || !session.privilege_id || !session.company_id) {
     return Response.json(
       { success: false, status_code: 401, message: "Your session expired. Please sign in again." },
@@ -70,9 +64,6 @@ export async function POST(request: Request) {
       }
 
       const punch = await punchAttendance(db, session.user_id!, session.company_id, session.privilege_id!);
-      if (!punch.success) {
-        return { success: false as const, status_code: 409, message: punch.message };
-      }
       const viaFace = liveFace ? "Face verified. " : "";
       return {
         success: true as const,
@@ -81,11 +72,11 @@ export async function POST(request: Request) {
       };
     });
 
-    const token = await encryptSession(nextSession);
+    const tokenHeader = await userCookieHeader(nextSession);
     return Response.json(result, {
       status: result.status_code,
       headers: {
-        "Set-Cookie": sessionCookieHeader(token),
+        "Set-Cookie": tokenHeader,
       },
     });
   } catch {

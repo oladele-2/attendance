@@ -4,11 +4,14 @@ import { cookies, headers } from "next/headers";
 import type { SessionPayload } from "./types";
 
 export const COOKIE = "attendance_session";
+export const FACILITY_COOKIE = "attendance_facility";
+
+const USER_MAX_AGE = 60 * 60 * 24 * 14;
+const FACILITY_MAX_AGE = 60 * 60 * 24 * 365 * 10;
 
 function sessionSecret() {
   let secret: string | undefined;
   try {
-    // Use static property access — some Workers tooling breaks env[name] dynamic reads.
     const fromEnv = env.SESSION_SECRET;
     if (typeof fromEnv === "string" && fromEnv.length > 0) secret = fromEnv;
   } catch {
@@ -24,17 +27,43 @@ function sessionSecret() {
   return new TextEncoder().encode(secret);
 }
 
-function tokenFromCookieHeader(header: string | null | undefined) {
+function tokenFromCookieHeader(header: string | null | undefined, name: string) {
   if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`));
+  const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export async function encryptSession(payload: SessionPayload) {
+function cookieHeader(name: string, token: string, maxAge: number) {
+  return `${name}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+}
+
+export function expiredCookieHeader(name: string) {
+  return `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}
+
+function mergeSession(
+  facility: SessionPayload | null,
+  user: SessionPayload | null,
+): SessionPayload | null {
+  const company_id = user?.company_id ?? facility?.company_id;
+  if (!company_id) return null;
+  return {
+    company_id,
+    company: user?.company || facility?.company || "",
+    user_id: user?.user_id,
+    first: user?.first,
+    last: user?.last,
+    privilege: user?.privilege,
+    privilege_id: user?.privilege_id,
+    last_attempt: user?.last_attempt,
+  };
+}
+
+export async function encryptSession(payload: SessionPayload, maxAgeSeconds = USER_MAX_AGE) {
   return new SignJWT(payload as JWTPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("14d")
+    .setExpirationTime(`${Math.max(60, maxAgeSeconds)}s`)
     .sign(sessionSecret());
 }
 
@@ -48,35 +77,56 @@ export async function decryptSession(token: string | undefined | null): Promise<
   }
 }
 
+export async function sessionFromCookieHeader(header: string | null | undefined): Promise<SessionPayload | null> {
+  const user = await decryptSession(tokenFromCookieHeader(header, COOKIE));
+  const facility = await decryptSession(tokenFromCookieHeader(header, FACILITY_COOKIE));
+  return mergeSession(facility, user);
+}
+
 export async function getSession(): Promise<SessionPayload | null> {
-  let token: string | null = null;
+  let header: string | null = null;
   try {
-    const headerList = await headers();
-    token = tokenFromCookieHeader(headerList.get("cookie"));
+    header = (await headers()).get("cookie");
   } catch {
-    token = null;
+    header = null;
   }
-  if (!token) {
-    try {
-      const jar = await cookies();
-      token = jar.get(COOKIE)?.value ?? null;
-    } catch {
-      token = null;
-    }
+  if (header) {
+    const fromHeader = await sessionFromCookieHeader(header);
+    if (fromHeader) return fromHeader;
   }
-  return decryptSession(token);
+  try {
+    const jar = await cookies();
+    const user = await decryptSession(jar.get(COOKIE)?.value);
+    const facility = await decryptSession(jar.get(FACILITY_COOKIE)?.value);
+    return mergeSession(facility, user);
+  } catch {
+    return null;
+  }
 }
 
 export async function setSession(payload: SessionPayload) {
   const jar = await cookies();
-  const token = await encryptSession(payload);
-  jar.set(COOKIE, token, {
+  const facilityToken = await encryptSession(
+    { company_id: payload.company_id, company: payload.company },
+    FACILITY_MAX_AGE,
+  );
+  jar.set(FACILITY_COOKIE, facilityToken, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     secure: true,
-    maxAge: 60 * 60 * 24 * 14,
+    maxAge: FACILITY_MAX_AGE,
   });
+  if (payload.user_id) {
+    const userToken = await encryptSession(payload, USER_MAX_AGE);
+    jar.set(COOKIE, userToken, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: true,
+      maxAge: USER_MAX_AGE,
+    });
+  }
 }
 
 export async function clearSession() {
@@ -85,8 +135,17 @@ export async function clearSession() {
 }
 
 export function sessionCookieHeader(token: string) {
-  const maxAge = 60 * 60 * 24 * 14;
-  return `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+  return cookieHeader(COOKIE, token, USER_MAX_AGE);
+}
+
+export async function facilityCookieHeader(payload: Pick<SessionPayload, "company_id" | "company">) {
+  const token = await encryptSession({ company_id: payload.company_id, company: payload.company }, FACILITY_MAX_AGE);
+  return cookieHeader(FACILITY_COOKIE, token, FACILITY_MAX_AGE);
+}
+
+export async function userCookieHeader(payload: SessionPayload) {
+  const token = await encryptSession(payload, USER_MAX_AGE);
+  return cookieHeader(COOKIE, token, USER_MAX_AGE);
 }
 
 export function isAdmin(session: SessionPayload | null) {

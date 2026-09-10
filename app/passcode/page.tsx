@@ -1,3 +1,4 @@
+import { RestoreFacility } from "@/components/RestoreFacility";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { IconBuilding, IconLock } from "@/components/icons";
@@ -7,7 +8,7 @@ import { PendingButton } from "@/components/PendingButton";
 export default async function PasscodePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; reset?: string }>;
 }) {
   const session = await getSession();
   if (session?.company_id) redirect(session.user_id ? "/" : "/scan");
@@ -20,8 +21,11 @@ export default async function PasscodePage({
           <IconBuilding size={28} />
         </span>
         <h2 className="mb-2 text-2xl font-bold text-[#ff8002]">Facility Passcode</h2>
-        <p className="mb-6 text-sm text-slate-500">Enter your hospital attendance passcode to continue.</p>
+        <p className="mb-6 text-sm text-slate-500">
+          Enter your hospital attendance passcode once. This device will remember it.
+        </p>
         {params.error ? <FlashBanner error={params.error} /> : null}
+        <RestoreFacility skip={Boolean(params.error || params.reset)} />
         <form action="/api/session/facility" method="post" className="flex flex-col gap-4" autoComplete="off">
           <label className="sr-only" htmlFor="facility_id">
             Passcode

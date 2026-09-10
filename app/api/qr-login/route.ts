@@ -1,12 +1,10 @@
 import { userApproved, companyAllowsLogin } from "@/lib/auth";
 import { withDb } from "@/lib/db";
 import { getCompanyById, getUserById, getUserPrivileges } from "@/lib/queries";
-import { decryptSession, encryptSession, sessionCookieHeader } from "@/lib/session";
+import { facilityCookieHeader, sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = cookie.match(/(?:^|;\s*)attendance_session=([^;]+)/);
-  const session = await decryptSession(match ? decodeURIComponent(match[1]) : null);
+  const session = await sessionFromCookieHeader(request.headers.get("cookie"));
   if (!session?.company_id) {
     return Response.json(
       { success: false, message: "Enter the facility passcode first, then scan again." },
@@ -49,26 +47,24 @@ export async function POST(request: Request) {
       return Response.json({ success: false, message: result.message });
     }
 
-    const token = await encryptSession({
+    const next = {
       ...session,
       user_id: result.user.user_id,
       first: result.user.first,
       last: result.user.last,
       privilege: result.privileges.privilege,
       privilege_id: result.privileges.id,
-    });
-
+    };
+    const headers = new Headers();
+    headers.append("Set-Cookie", await facilityCookieHeader(next));
+    headers.append("Set-Cookie", await userCookieHeader(next));
     return Response.json(
       {
         success: true,
         message: `Login successful. Welcome ${result.user.first}`,
         redirect: "/verification",
       },
-      {
-        headers: {
-          "Set-Cookie": sessionCookieHeader(token),
-        },
-      },
+      { headers },
     );
   } catch {
     return Response.json({

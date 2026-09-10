@@ -62,6 +62,9 @@ export default async function SignInPage({
           <IconQr size={16} />
           Prefer QR login?
         </Link>
+        <a href="/forget-facility" className="mt-4 block text-center text-xs text-slate-400 hover:text-slate-600">
+          Not this hospital?
+        </a>
       </div>
     </main>
   );

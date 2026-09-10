@@ -1,6 +1,6 @@
 import { getCompanyById } from "@/lib/queries";
 import { withDb } from "@/lib/db";
-import { encryptSession, sessionCookieHeader } from "@/lib/session";
+import { expiredCookieHeader, COOKIE, facilityCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -31,17 +31,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const token = await encryptSession({
-      company_id: facility.id,
-      company: facility.name,
-    });
-    return new Response(null, {
-      status: 303,
-      headers: {
-        Location: "/scan",
-        "Set-Cookie": sessionCookieHeader(token),
-      },
-    });
+    const headers = new Headers();
+    headers.set("Location", "/scan");
+    headers.append("Set-Cookie", await facilityCookieHeader({ company_id: facility.id, company: facility.name }));
+    headers.append("Set-Cookie", expiredCookieHeader(COOKIE));
+    return new Response(null, { status: 303, headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[facility-session]", message);

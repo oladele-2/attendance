@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/guards";
 import { IconChart, IconQr, IconScanFace, IconUsers } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
@@ -57,7 +56,7 @@ export default async function HomePage({
       <FlashBanner notice={params.notice} error={params.error} className="mx-auto mb-6 max-w-xl" />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
-          <Link
+          <a
             key={card.href}
             href={card.href}
             className="group rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg hover:ring-[#ff8002]/40"
@@ -67,7 +66,7 @@ export default async function HomePage({
             </span>
             <h2 className="mb-1 text-lg font-semibold text-slate-800">{card.title}</h2>
             <p className="text-sm text-slate-500">{card.body}</p>
-          </Link>
+          </a>
         ))}
       </div>
     </main>

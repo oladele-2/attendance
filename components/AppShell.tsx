@@ -1,4 +1,5 @@
 import { Nav } from "@/components/Nav";
+import { RememberFacility } from "@/components/RememberFacility";
 import { getSession } from "@/lib/session";
 import { withDb } from "@/lib/db";
 import { getUserById } from "@/lib/queries";
@@ -17,6 +18,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <RememberFacility companyId={session?.company_id} companyName={session?.company} />
       {session?.company_id ? (
         <Nav
           company={session.company}
