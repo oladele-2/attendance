@@ -20,15 +20,17 @@ export async function GET(request: Request) {
   const admin = session.privilege === "CEO" || session.privilege === "Admin";
   const staff = parseStaff(url.searchParams.get("staff"), admin, session.user_id);
   const month = url.searchParams.get("month") || undefined;
-  const date = month ? undefined : url.searchParams.get("date") || undefined;
+  const from = url.searchParams.get("from") || undefined;
+  const to = url.searchParams.get("to") || undefined;
+  const date = month || from || to ? undefined : url.searchParams.get("date") || undefined;
   const excel = url.searchParams.get("format") === "excel";
 
   const rows = await withDb((db) =>
-    hospitalAttendance(db, session.company_id, 0, 8000, staff, date, month),
+    hospitalAttendance(db, session.company_id, 0, 8000, staff, date, month, from, to),
   );
 
   const body = attendanceCsv(rows);
-  const stamp = month || date || "all";
+  const stamp = month || date || (from || to ? `${from || "start"}-to-${to || "now"}` : "all");
   const filename = `attendance-${stamp}.${excel ? "xls" : "csv"}`;
 
   return new Response(body, {

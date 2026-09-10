@@ -7,6 +7,9 @@ type SummaryRow = RowDataPacket & {
   total_present: number | null;
   total_absent: number | null;
   total_minutes: number | null;
+  late_arrivals: number | null;
+  long_or_incomplete: number | null;
+  attendance_percentage: number | null;
 };
 
 /** Day key for a row — always derived from check_in_time (no attendance_date column). */
@@ -121,10 +124,11 @@ export async function getPrivilegeAtCompany(db: Connection, userId: number, comp
 
 /** Latest open shift for this staff at this facility (supports overnight + multi-shift days). */
 export async function getOpenAttendance(db: Connection, userId: number, hospitalId: number) {
-  return queryOne<RowDataPacket & AttendanceRow>(
+  return queryOne<RowDataPacket & AttendanceRow & { minutes_open: number }>(
     db,
     `${FRESH_READ}
-     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status,
+       TIMESTAMPDIFF(MINUTE, check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
      FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND check_in_time IS NOT NULL AND check_out_time IS NULL
      ORDER BY check_in_time DESC
@@ -386,6 +390,8 @@ function attendanceFilter(
   date?: string | null,
   month?: string | null,
   alias = "",
+  from?: string | null,
+  to?: string | null,
 ) {
   const col = alias ? `${alias}.` : "";
   let sql = ` WHERE ${col}hospital_id=?`;
@@ -394,7 +400,18 @@ function attendanceFilter(
     sql += ` AND ${col}user_id=?`;
     params.push(staff);
   }
-  if (month) {
+  if (from || to) {
+    if (from && !nextIsoDay(from)) return { sql: `${sql} AND 1=0`, params };
+    if (to && !nextIsoDay(to)) return { sql: `${sql} AND 1=0`, params };
+    if (from) {
+      sql += ` AND ${col}check_in_time>=?`;
+      params.push(`${from} 00:00:00`);
+    }
+    if (to) {
+      sql += ` AND ${col}check_in_time<?`;
+      params.push(`${nextIsoDay(to)} 00:00:00`);
+    }
+  } else if (month) {
     const bounds = monthBounds(month);
     if (!bounds) return { sql: `${sql} AND 1=0`, params };
     sql += ` AND ${col}check_in_time>=? AND ${col}check_in_time<?`;
@@ -432,10 +449,12 @@ export async function hospitalAttendance(
   staff?: number | null,
   date?: string | null,
   month?: string | null,
+  from?: string | null,
+  to?: string | null,
 ) {
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeLimit = Math.max(1, Number(limit) || 20);
-  const filter = attendanceFilter(company, staff, date, month, "a");
+  const filter = attendanceFilter(company, staff, date, month, "a", from, to);
   const day = DAY_EXPR("a");
   return queryAll<RowDataPacket & AttendanceRow>(
     db,
@@ -493,7 +512,10 @@ export async function hospitalAttendanceStats(
        COUNT(*) AS total,
        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS total_present,
        SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
-       SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes
+       SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes,
+       SUM(CASE WHEN TIME(check_in_time) > '09:00:00' THEN 1 ELSE 0 END) AS late_arrivals,
+       SUM(CASE WHEN check_out_time IS NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) > 720 THEN 1 ELSE 0 END) AS long_or_incomplete,
+       ROUND(100 * SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS attendance_percentage
      FROM attendance${filter.sql}`,
     filter.params,
   );
@@ -502,6 +524,9 @@ export async function hospitalAttendanceStats(
     total_present: Number(row?.total_present ?? 0),
     total_absent: Number(row?.total_absent ?? 0),
     total_minutes: Number(row?.total_minutes ?? 0),
+    late_arrivals: Number(row?.late_arrivals ?? 0),
+    long_or_incomplete: Number(row?.long_or_incomplete ?? 0),
+    attendance_percentage: Number(row?.attendance_percentage ?? 0),
   };
 }
 
@@ -546,10 +571,8 @@ export async function listOpenShifts(db: Connection, hospitalId: number) {
      FROM attendance a
      LEFT JOIN user u ON u.user_id = a.user_id
      WHERE a.hospital_id=? AND a.check_out_time IS NULL AND a.check_in_time IS NOT NULL
-       AND a.check_in_time >= DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00'))
-       AND a.check_in_time < DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')), INTERVAL 1 DAY)
      ORDER BY a.check_in_time ASC
-     LIMIT 200`,
+     LIMIT 500`,
     [hospitalId],
   );
 }

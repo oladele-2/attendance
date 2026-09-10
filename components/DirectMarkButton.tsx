@@ -10,12 +10,21 @@ type Props = {
   disabledReason?: string;
 };
 
+type Confirmation = {
+  title: string;
+  timestamp: string;
+  facility: string;
+  duration: string | null;
+  reference: string;
+};
+
 export function DirectMarkButton({ label, personName, disabled = false, disabledReason }: Props) {
   const [status, setStatus] = useState("");
   const [ok, setOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [attendanceId, setAttendanceId] = useState<number | null>(null);
   const [undoLeft, setUndoLeft] = useState(0);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const isOut = label.toLowerCase().includes("out");
   const isDone = disabled && /done|unavailable/i.test(label);
 
@@ -54,6 +63,7 @@ export function DirectMarkButton({ label, personName, disabled = false, disabled
         message?: string;
         attendanceId?: number;
         undoSeconds?: number;
+        confirmation?: Confirmation;
       };
       if (res.status === 401) {
         setOk(false);
@@ -74,6 +84,7 @@ export function DirectMarkButton({ label, personName, disabled = false, disabled
         setStatus(data.message || "Done");
         setAttendanceId(data.attendanceId ?? null);
         setUndoLeft(data.undoSeconds ?? 120);
+        setConfirmation(data.confirmation ?? null);
         setBusy(false);
       } else {
         setOk(false);
@@ -102,6 +113,7 @@ export function DirectMarkButton({ label, personName, disabled = false, disabled
         setStatus(data.message || "Undone");
         setUndoLeft(0);
         setAttendanceId(null);
+        setConfirmation(null);
         window.setTimeout(() => {
           window.location.href = "/verification";
         }, 800);
@@ -135,7 +147,17 @@ export function DirectMarkButton({ label, personName, disabled = false, disabled
         {busy ? "Please wait..." : label}
       </button>
       {helper ? <p className="mt-3 text-sm text-slate-500">{helper}</p> : null}
-      {status ? (
+      {confirmation && ok ? (
+        <div role="status" className="mx-auto mt-5 max-w-md rounded-2xl border-2 border-green-300 bg-green-50 p-5 text-green-950 shadow-sm">
+          <p className="text-2xl font-bold">{confirmation.title}</p>
+          <dl className="mt-3 grid gap-1 text-sm">
+            <div><dt className="inline font-semibold">Time: </dt><dd className="inline">{confirmation.timestamp}</dd></div>
+            <div><dt className="inline font-semibold">Facility: </dt><dd className="inline">{confirmation.facility}</dd></div>
+            {confirmation.duration ? <div><dt className="inline font-semibold">Shift duration: </dt><dd className="inline">{confirmation.duration}</dd></div> : null}
+            <div><dt className="inline font-semibold">Reference: </dt><dd className="inline font-mono">{confirmation.reference}</dd></div>
+          </dl>
+        </div>
+      ) : status ? (
         <p
           className={`mt-3 flex items-center justify-center gap-1 text-sm ${
             ok === false ? "text-[#a40606]" : ok === true ? "text-green-700" : "text-slate-600"

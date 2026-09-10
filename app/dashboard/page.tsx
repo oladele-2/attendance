@@ -147,6 +147,41 @@ export default async function DashboardPage({
           </div>
         </div>
 
+        {admin ? (
+          <section className="mb-6">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Management summary</h2>
+                <p className="text-xs text-slate-500">Late means checked in after 9:00 AM. Long means over 12 hours or still open.</p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-800">Late arrivals</p>
+                <p className="mt-1 text-2xl font-bold text-amber-950">{summary?.late_arrivals ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm font-medium text-red-800">Long / incomplete shifts</p>
+                <p className="mt-1 text-2xl font-bold text-red-950">{summary?.long_or_incomplete ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-medium text-blue-800">Completed attendance</p>
+                <p className="mt-1 text-2xl font-bold text-blue-950">{summary?.attendance_percentage ?? 0}%</p>
+              </div>
+            </div>
+            <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">Export a custom date range</summary>
+              <form action="/api/reports/attendance" method="get" className="mt-3 grid gap-3 sm:grid-cols-4">
+                <label className="text-sm text-slate-600">From<input required type="date" name="from" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2" /></label>
+                <label className="text-sm text-slate-600">To<input required type="date" name="to" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2" /></label>
+                <label className="text-sm text-slate-600">Staff<StaffPicker options={staffOptions} value={staff} /></label>
+                <label className="text-sm text-slate-600">Format<select name="format" defaultValue="csv" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"><option value="csv">CSV</option><option value="excel">Excel</option></select></label>
+                <button type="submit" className="rounded-lg bg-[#ff8002] px-4 py-2 font-semibold text-white sm:col-span-4">Download report</button>
+              </form>
+            </details>
+          </section>
+        ) : null}
+
         <div className="overflow-x-auto rounded-xl ring-1 ring-slate-200">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-slate-50 text-slate-600">

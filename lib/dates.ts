@@ -90,6 +90,11 @@ export function lagosClockNow() {
   return clock(new Date());
 }
 
+export function lagosTimestampNow() {
+  const now = new Date();
+  return `${shortDay(now)} ${clock(now)}`;
+}
+
 export function actionDate(value: string | Date | null | undefined) {
   const date = asDate(value);
   if (!date) return value == null ? "" : String(value);

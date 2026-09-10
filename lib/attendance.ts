@@ -32,6 +32,7 @@ export async function punchAttendance(
       note,
       attendanceId: open.id,
       signedOut: true,
+      durationMinutes: Math.max(0, Number(open.minutes_open ?? 0)),
     };
   }
 
@@ -43,6 +44,7 @@ export async function punchAttendance(
     note: "",
     attendanceId,
     signedOut: false,
+    durationMinutes: 0,
   };
 }
 

@@ -49,6 +49,14 @@ type Props = {
   confirmLabel?: string;
 };
 
+type Confirmation = {
+  title: string;
+  timestamp: string;
+  facility: string;
+  duration: string | null;
+  reference: string;
+};
+
 export function FaceCapture({
   mode,
   endpoint,
@@ -70,6 +78,7 @@ export function FaceCapture({
   const [busy, setBusy] = useState(false);
   const [attendanceId, setAttendanceId] = useState<number | null>(null);
   const [undoLeft, setUndoLeft] = useState(0);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const descriptorRef = useRef<number[] | null>(null);
   const timerRef = useRef<number | undefined>(undefined);
   const streamRef = useRef<MediaStream | undefined>(undefined);
@@ -221,6 +230,7 @@ export function FaceCapture({
         redirect?: string;
         attendanceId?: number;
         undoSeconds?: number;
+        confirmation?: Confirmation;
       };
       if (res.status === 401) {
         setOk(false);
@@ -242,6 +252,7 @@ export function FaceCapture({
         if (mode === "verify") {
           setAttendanceId(data.attendanceId ?? null);
           setUndoLeft(data.undoSeconds ?? 120);
+          setConfirmation(data.confirmation ?? null);
         }
       } else {
         setOk(false);
@@ -268,6 +279,7 @@ export function FaceCapture({
       if (data.success) {
         setStatus(data.message || "Undone");
         setUndoLeft(0);
+        setConfirmation(null);
         window.setTimeout(() => {
           window.location.href = "/verification";
         }, 800);
@@ -291,14 +303,24 @@ export function FaceCapture({
           <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 h-full w-full" />
         </div>
       ) : null}
-      <p
-        className={`mt-3 flex items-center gap-2 text-center text-sm ${
-          ok === false ? "text-[#a40606]" : ok === true ? "text-green-700" : "text-slate-600"
-        }`}
-      >
-        {ok === false ? <IconAlert size={16} /> : <IconCamera size={16} />}
-        {status}
-      </p>
+      {confirmation && ok ? (
+        <div role="status" className="mt-4 w-full rounded-2xl border-2 border-green-300 bg-green-50 p-5 text-center text-green-950 shadow-sm">
+          <p className="text-2xl font-bold">{confirmation.title}</p>
+          <p className="mt-2 text-sm">{confirmation.timestamp}</p>
+          <p className="text-sm font-semibold">{confirmation.facility}</p>
+          {confirmation.duration ? <p className="text-sm">Shift duration: {confirmation.duration}</p> : null}
+          <p className="mt-2 font-mono text-xs">Reference: {confirmation.reference}</p>
+        </div>
+      ) : (
+        <p
+          className={`mt-3 flex items-center gap-2 text-center text-sm ${
+            ok === false ? "text-[#a40606]" : ok === true ? "text-green-700" : "text-slate-600"
+          }`}
+        >
+          {ok === false ? <IconAlert size={16} /> : <IconCamera size={16} />}
+          {status}
+        </p>
+      )}
       {cameraOn ? (
         <button type="button" onClick={() => stopCamera()} className="mt-2 text-sm font-semibold text-slate-600 hover:text-[#a40606]">
           Close camera

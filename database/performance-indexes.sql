@@ -10,6 +10,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_user_facility_time
 CREATE INDEX IF NOT EXISTS idx_attendance_open_shift
   ON attendance (user_id, hospital_id, check_out_time, check_in_time);
 
+CREATE INDEX IF NOT EXISTS idx_attendance_facility_open_shift
+  ON attendance (hospital_id, check_out_time, check_in_time);
+
 CREATE INDEX IF NOT EXISTS idx_privilege_company_status_user
   ON privilege (company, status, user_id);
 

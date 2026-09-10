@@ -9,7 +9,7 @@ import {
   getLatestCompletedToday,
   getOpenAttendance,
 } from "@/lib/queries";
-import { actionDate, parseDateTime } from "@/lib/dates";
+import { actionDate, minutesToHm, mysqlLagosStamp, parseDateTime } from "@/lib/dates";
 import { isoDate } from "@/lib/dates";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
 
@@ -30,7 +30,7 @@ export default async function VerificationPage({
   const today = isoDate();
 
   let user: { pre: string | null; phone: string | null } | null = null;
-  let openShift: { check_in_time: string; check_in_day: string } | null = null;
+  let openShift: { check_in_time: string; check_in_day: string; minutes_open: number } | null = null;
   let lastCompleted: { check_in_time: string; check_out_time: string } | null = null;
   let shiftsToday = 0;
   let loadError: string | undefined = params.error;
@@ -50,8 +50,9 @@ export default async function VerificationPage({
 
     if (result.open?.check_in_time) {
       openShift = {
-        check_in_time: asText(result.open.check_in_time),
+        check_in_time: String(result.open.check_in_time),
         check_in_day: isoDate(result.open.check_in_time),
+        minutes_open: Number(result.open.minutes_open ?? 0),
       };
     }
 
@@ -95,6 +96,10 @@ export default async function VerificationPage({
     buttonLabel = "Check-in again";
   }
 
+  const needsCheckoutWarning = Boolean(
+    openShift && (openShift.check_in_day < today || openShift.minutes_open >= 12 * 60),
+  );
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:p-8">
@@ -106,6 +111,16 @@ export default async function VerificationPage({
         </div>
 
         {loadError ? <FlashBanner error={loadError} /> : null}
+
+        {needsCheckoutWarning && openShift ? (
+          <div role="alert" className="mb-5 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-center text-red-900">
+            <p className="text-lg font-bold">Your previous shift is still open</p>
+            <p className="mt-1 text-sm">
+              You checked in {mysqlLagosStamp(openShift.check_in_time)} and have been on duty for {minutesToHm(openShift.minutes_open)}.
+              Only you can check out this shift.
+            </p>
+          </div>
+        ) : null}
 
         <div className="mb-5 rounded-xl bg-slate-50 p-4 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#ff8002] shadow-sm">

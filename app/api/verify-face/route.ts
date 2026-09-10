@@ -1,7 +1,7 @@
 import { withDb } from "@/lib/db";
 import { getUserFaceVector } from "@/lib/queries";
 import { punchAttendance, undoAttendance, UNDO_SECONDS } from "@/lib/attendance";
-import { lagosClockNow } from "@/lib/dates";
+import { lagosClockNow, lagosTimestampNow, minutesToHm } from "@/lib/dates";
 import { euclideanDistance, FACE_THRESHOLD, normalizeVector, parseFaceVector } from "@/lib/face";
 import { sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
 
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       const viaFace = liveFace ? "Face verified. " : "";
       const clock = lagosClockNow();
       const signedOut = punch.action === "Checked out";
+      const reference = `ATT-${String(punch.attendanceId).padStart(6, "0")}`;
       return {
         success: true as const,
         status_code: 200,
@@ -99,6 +100,13 @@ export async function POST(request: Request) {
         action: punch.action,
         attendanceId: punch.attendanceId,
         undoSeconds: UNDO_SECONDS,
+        confirmation: {
+          title: signedOut ? "Checked out" : "Checked in",
+          timestamp: `${lagosTimestampNow()} (Africa/Lagos)`,
+          facility: session.company,
+          duration: signedOut ? minutesToHm(punch.durationMinutes) : null,
+          reference,
+        },
       };
     });
 
