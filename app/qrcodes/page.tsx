@@ -14,7 +14,7 @@ export default async function QrCodesPage({
   const session = await requireAdmin();
   const params = await searchParams;
   const page = Math.max(1, Number(params.page || 1));
-  const limit = 6;
+  const limit = 5;
   const offset = (page - 1) * limit;
 
   const { cards, total, company } = await withDb(async (db) => {

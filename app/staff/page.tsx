@@ -15,7 +15,7 @@ export default async function StaffPage({
   const params = await searchParams;
   const q = (params.q ?? "").trim();
   const page = Math.max(1, Number(params.page || 1));
-  const limit = 10;
+  const limit = 5;
   const offset = (page - 1) * limit;
 
   const { rows, total } = await withDb(async (db) => {

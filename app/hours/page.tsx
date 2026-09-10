@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { hospitalAttendance, hospitalAttendanceStats } from "@/lib/queries";
@@ -5,10 +6,19 @@ import { actionDate, currentMonthIso, formatMonthTitle, isoDateValue, minutesToH
 import { attendanceExportPath } from "@/lib/report-csv";
 import { IconCalendar, IconCheck, IconClock, IconDownload, IconXCircle } from "@/components/icons";
 
-export default async function MyHoursPage() {
+export default async function MyHoursPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await requireUser();
+  const params = await searchParams;
   const month = currentMonthIso();
   const staff = session.user_id!;
+  const requestedPage = Number(params.page || 1);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const limit = 5;
+  const offset = (page - 1) * limit;
   let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
   let total = 0;
   let summary: Awaited<ReturnType<typeof hospitalAttendanceStats>> | null = null;
@@ -16,7 +26,7 @@ export default async function MyHoursPage() {
   try {
     const result = await withDb(async (db) => {
       const stats = await hospitalAttendanceStats(db, session.company_id, staff, undefined, month);
-      const rows = await hospitalAttendance(db, session.company_id, 0, 40, staff, undefined, month);
+      const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, undefined, month);
       return { rows, total: stats.total, summary: stats };
     });
     rows = result.rows;
@@ -28,6 +38,7 @@ export default async function MyHoursPage() {
 
   const csvHref = attendanceExportPath({ staff, month, format: "csv" });
   const excelHref = attendanceExportPath({ staff, month, format: "excel" });
+  const pages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -77,7 +88,7 @@ export default async function MyHoursPage() {
         </div>
 
         <p className="mb-3 text-sm text-slate-500">
-          {total} shift{total === 1 ? "" : "s"} this month. Showing the most recent {rows.length}.
+          {total} shift{total === 1 ? "" : "s"} this month. Showing up to {limit} per page.
         </p>
         <div className="overflow-x-auto rounded-xl ring-1 ring-slate-200">
           <table className="w-full text-left text-sm">
@@ -116,6 +127,29 @@ export default async function MyHoursPage() {
             </tbody>
           </table>
         </div>
+        <nav className="mt-5 flex items-center justify-center gap-3">
+          {page > 1 ? (
+            <Link
+              prefetch={false}
+              href={`/hours?page=${page - 1}`}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Previous
+            </Link>
+          ) : null}
+          <span className="px-3 py-1.5 text-sm text-slate-600">
+            {page} / {pages}
+          </span>
+          {page < pages ? (
+            <Link
+              prefetch={false}
+              href={`/hours?page=${page + 1}`}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Next
+            </Link>
+          ) : null}
+        </nav>
       </div>
     </main>
   );

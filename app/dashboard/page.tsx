@@ -27,7 +27,7 @@ export default async function DashboardPage({
   const month = params.month || undefined;
   const date = month ? undefined : !params.date ? isoDate() : params.date || undefined;
   const page = Math.max(1, Number(params.page || 1));
-  const limit = 20;
+  const limit = 5;
   const offset = (page - 1) * limit;
 
   let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
