@@ -5,6 +5,7 @@ import { formatLongDate, isoDate, isoDateValue, minutesToHm, mysqlLagosStamp } f
 import { FlashBanner } from "@/components/FlashBanner";
 import { StaffAvatar } from "@/components/StaffAvatar";
 import { IconClock, IconUsers } from "@/components/icons";
+import Link from "next/link";
 
 type OpenShift = Awaited<ReturnType<typeof listOpenShifts>>[number];
 
@@ -55,17 +56,24 @@ function ShiftGroup({
 export default async function OnDutyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ hours?: string; notice?: string; error?: string }>;
+  searchParams: Promise<{ page?: string; notice?: string; error?: string }>;
 }) {
   const session = await requireAdmin();
   const params = await searchParams;
-  const hours = [8, 12, 16, 24].includes(Number(params.hours)) ? Number(params.hours) : 12;
+  const longShiftHours = 12;
+  const requestedPage = Number(params.page ?? 1);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const perPage = 5;
   const today = isoDate();
   const open = await withDb((db) => listOpenShifts(db, session.company_id));
-  const longIds = new Set(open.filter((row) => Number(row.minutes_open) >= hours * 60).map((row) => row.id));
-  const unusuallyLong = open.filter((row) => longIds.has(row.id));
-  const overnight = open.filter((row) => !longIds.has(row.id) && isoDateValue(row.check_in_time) < today);
-  const todayOpen = open.filter((row) => !longIds.has(row.id) && isoDateValue(row.check_in_time) >= today);
+  const pages = Math.max(1, Math.ceil(open.length / perPage));
+  const currentPage = Math.min(page, pages);
+  const pageStart = (currentPage - 1) * perPage;
+  const visible = open.slice(pageStart, pageStart + perPage);
+  const longIds = new Set(visible.filter((row) => Number(row.minutes_open) >= longShiftHours * 60).map((row) => row.id));
+  const unusuallyLong = visible.filter((row) => longIds.has(row.id));
+  const overnight = visible.filter((row) => !longIds.has(row.id) && isoDateValue(row.check_in_time) < today);
+  const todayOpen = visible.filter((row) => !longIds.has(row.id) && isoDateValue(row.check_in_time) >= today);
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
@@ -79,23 +87,24 @@ export default async function OnDutyPage({
             <p className="text-sm text-slate-500">{session.company} · {formatLongDate(today)} · Africa/Lagos</p>
           </div>
         </div>
-        <form method="get" className="flex items-center gap-2 text-sm">
-          <label htmlFor="hours">Longer than</label>
-          <select id="hours" name="hours" defaultValue={String(hours)} className="rounded-lg border border-slate-300 px-2 py-1">
-            <option value="8">8 hours</option>
-            <option value="12">12 hours</option>
-            <option value="16">16 hours</option>
-            <option value="24">24 hours</option>
-          </select>
-          <button type="submit" className="rounded-lg bg-slate-100 px-2 py-1 font-medium text-slate-700">Apply</button>
-        </form>
       </div>
       <FlashBanner notice={params.notice} error={params.error} />
       <div className="grid gap-6">
         <ShiftGroup title="Checked in today" rows={todayOpen} empty="Nobody checked in today is currently on duty." />
         <ShiftGroup title="Overnight shifts" rows={overnight} empty="There are no open overnight shifts." tone="warning" />
-        <ShiftGroup title={`Unusually long shifts (over ${hours}h)`} rows={unusuallyLong} empty={`There are no open shifts older than ${hours} hours.`} tone="danger" />
+        <ShiftGroup title="Unusually long shifts (over 12h)" rows={unusuallyLong} empty="There are no open shifts older than 12 hours." tone="danger" />
       </div>
+      {pages > 1 ? (
+        <nav className="mt-6 flex items-center justify-center gap-3" aria-label="Open shift pages">
+          {currentPage > 1 ? (
+            <Link prefetch={false} href={`/onduty?page=${currentPage - 1}`} className="rounded-lg bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200">Previous</Link>
+          ) : null}
+          <span className="text-sm text-slate-600">Page {currentPage} of {pages} · {open.length} shifts</span>
+          {currentPage < pages ? (
+            <Link prefetch={false} href={`/onduty?page=${currentPage + 1}`} className="rounded-lg bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-200">Next</Link>
+          ) : null}
+        </nav>
+      ) : null}
     </main>
   );
 }

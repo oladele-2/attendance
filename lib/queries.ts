@@ -37,22 +37,19 @@ function monthBounds(month: string) {
   return { start: `${month}-01`, end: next.toISOString().slice(0, 10) };
 }
 
-/** Hyperdrive caches identical SELECTs and does not invalidate them after INSERT/UPDATE. */
-const FRESH_READ = "/* NOW() */";
-
 const USER_COLS =
   "`user_id`, `first`, `last`, `email`, `pass`, `status`, `friendly`, `gender`, `pre`, `phone`, `img`, `staff_id`";
 
 export async function getCompanyById(db: Connection, id: number) {
   return queryOne<RowDataPacket & CompanyRow>(
     db,
-    "SELECT `id`, `name`, `type`, `status`, `logo`, `website`, `house_no`, `street`, `city`, `country`, `about` FROM `company` WHERE `id`=?",
+    "SELECT `id`, `name`, `type`, `status`, `logo`, `website`, `house_no`, `street`, `city`, `country`, `about` FROM `company` WHERE `id`=? AND NOW() IS NOT NULL",
     [id],
   );
 }
 
 export async function getUserById(db: Connection, id: number) {
-  return queryOne<RowDataPacket & UserRow>(db, `SELECT ${USER_COLS} FROM \`user\` WHERE \`user_id\`=?`, [id]);
+  return queryOne<RowDataPacket & UserRow>(db, `SELECT ${USER_COLS} FROM \`user\` WHERE \`user_id\`=? AND NOW() IS NOT NULL`, [id]);
 }
 
 export async function getUserContact(db: Connection, id: number) {
@@ -74,7 +71,7 @@ export async function getUserName(db: Connection, id: number) {
 export async function getUserFaceVector(db: Connection, id: number) {
   return queryOne<RowDataPacket & { face_vector: string | null }>(
     db,
-    "SELECT `face_vector` FROM `user` WHERE `user_id`=?",
+    "SELECT `face_vector` FROM `user` WHERE `user_id`=? AND NOW() IS NOT NULL",
     [id],
   );
 }
@@ -82,20 +79,20 @@ export async function getUserFaceVector(db: Connection, id: number) {
 export async function getUserByFriendly(db: Connection, friend: string) {
   return queryOne<RowDataPacket & { user_id: number }>(
     db,
-    "SELECT user_id FROM `user` WHERE `friendly`=?",
+    "SELECT user_id FROM `user` WHERE `friendly`=? AND NOW() IS NOT NULL",
     [friend],
   );
 }
 
 export async function getUserByEmail(db: Connection, email: string) {
-  return queryOne<RowDataPacket & UserRow>(db, `SELECT ${USER_COLS} FROM \`user\` WHERE \`email\`=?`, [email]);
+  return queryOne<RowDataPacket & UserRow>(db, `SELECT ${USER_COLS} FROM \`user\` WHERE \`email\`=? AND NOW() IS NOT NULL`, [email]);
 }
 
 export async function getUserByPhone(db: Connection, phone: string) {
   const digits = phone.replace(/\D/g, "");
   return queryOne<RowDataPacket & UserRow>(
     db,
-    `SELECT ${USER_COLS} FROM \`user\` WHERE CONCAT(\`pre\`,\`phone\`)=? OR CONCAT('+',\`pre\`,\`phone\`)=? OR \`phone\`=? LIMIT 1`,
+    `SELECT ${USER_COLS} FROM \`user\` WHERE (CONCAT(\`pre\`,\`phone\`)=? OR CONCAT('+',\`pre\`,\`phone\`)=? OR \`phone\`=?) AND NOW() IS NOT NULL LIMIT 1`,
     [digits, phone, digits],
   );
 }
@@ -109,7 +106,7 @@ export async function getUserPrivileges(
 ) {
   return queryOne<RowDataPacket & PrivilegeRow>(
     db,
-    "SELECT `id`, `user_id`, `status`, `company`, `privilege` FROM `privilege` WHERE `user_id`=? AND (`status`=? OR `status`=?) AND `company`=?",
+    "SELECT `id`, `user_id`, `status`, `company`, `privilege` FROM `privilege` WHERE `user_id`=? AND (`status`=? OR `status`=?) AND `company`=? AND NOW() IS NOT NULL",
     [userId, status, statusTwo, company],
   );
 }
@@ -117,7 +114,7 @@ export async function getUserPrivileges(
 export async function getPrivilegeAtCompany(db: Connection, userId: number, company: number) {
   return queryOne<RowDataPacket & PrivilegeRow>(
     db,
-    "SELECT `id`, `user_id`, `status`, `company`, `privilege` FROM `privilege` WHERE `user_id`=? AND `company`=? LIMIT 1",
+    "SELECT `id`, `user_id`, `status`, `company`, `privilege` FROM `privilege` WHERE `user_id`=? AND `company`=? AND NOW() IS NOT NULL LIMIT 1",
     [userId, company],
   );
 }
@@ -126,8 +123,7 @@ export async function getPrivilegeAtCompany(db: Connection, userId: number, comp
 export async function getOpenAttendance(db: Connection, userId: number, hospitalId: number) {
   return queryOne<RowDataPacket & AttendanceRow & { minutes_open: number }>(
     db,
-    `${FRESH_READ}
-     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status,
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status,
        TIMESTAMPDIFF(MINUTE, check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
      FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND check_in_time IS NOT NULL AND check_out_time IS NULL
@@ -146,10 +142,9 @@ export async function getLatestCompletedToday(
 ) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    `${FRESH_READ}
-     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM \`attendance\`
-     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<? AND check_out_time IS NOT NULL
+     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<? AND check_out_time IS NOT NULL AND NOW() IS NOT NULL
      ORDER BY check_out_time DESC
      LIMIT 1`,
     [userId, hospitalId, `${today} 00:00:00`, `${nextIsoDay(today) ?? today} 00:00:00`],
@@ -164,9 +159,8 @@ export async function countShiftsToday(
 ) {
   const row = await queryOne<CountRow>(
     db,
-    `${FRESH_READ}
-     SELECT COUNT(*) AS total FROM \`attendance\`
-     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<?`,
+    `SELECT COUNT(*) AS total FROM \`attendance\`
+     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<? AND NOW() IS NOT NULL`,
     [userId, hospitalId, `${today} 00:00:00`, `${nextIsoDay(today) ?? today} 00:00:00`],
   );
   return Number(row?.total ?? 0);
@@ -175,9 +169,8 @@ export async function countShiftsToday(
 export async function getAttendanceById(db: Connection, id: number) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    `${FRESH_READ}
-     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
-     FROM attendance WHERE id=?`,
+    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+     FROM attendance WHERE id=? AND NOW() IS NOT NULL`,
     [id],
   );
 }
@@ -228,7 +221,7 @@ export async function companyStaffCount(db: Connection, company: number, search?
   const filter = rosterEmployeeWhere(company, search);
   const row = await queryOne<CountRow>(
     db,
-    `${FRESH_READ} SELECT COUNT(*) AS total FROM \`privilege\` p
+    `SELECT COUNT(*) AS total FROM \`privilege\` p
      LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
      ${filter.sql}`,
     filter.params,
@@ -262,7 +255,7 @@ export async function companyStaffPage(
     }
   >(
     db,
-    `${FRESH_READ} SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, p.\`privilege\`, p.\`status\`,
+    `SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, p.\`privilege\`, p.\`status\`,
         u.\`first\`, u.\`last\`, u.\`friendly\`, u.\`gender\`, u.\`pre\`, u.\`phone\`, u.\`img\`,
         IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
      FROM \`privilege\` p
@@ -276,7 +269,7 @@ export async function companyStaffPage(
 export async function facilityStaffOptions(db: Connection, company: number) {
   return queryAll<RowDataPacket & { user_id: number; first: string | null; last: string | null }>(
     db,
-    `${FRESH_READ} SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, u.\`first\`, u.\`last\`
+    `SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, u.\`first\`, u.\`last\`
      FROM \`privilege\` p
      LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
      WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
@@ -293,12 +286,12 @@ export async function getFacilityStaffProfile(db: Connection, ref: string, compa
     RowDataPacket & { user_id: number; first: string; last: string; friendly: string | null; has_face: number }
   >(
     db,
-    `${FRESH_READ} SELECT u.\`user_id\`, u.\`first\`, u.\`last\`, u.\`friendly\`,
+    `SELECT u.\`user_id\`, u.\`first\`, u.\`last\`, u.\`friendly\`,
         IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
      FROM \`user\` u
      INNER JOIN \`privilege\` p ON CAST(TRIM(p.\`user_id\`) AS UNSIGNED) = u.\`user_id\` AND p.\`company\`=?
        AND (p.\`status\`=? OR p.\`status\`=?) AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'
-     WHERE ${byId ? "u.`user_id`=?" : "u.`friendly`=?"}
+     WHERE ${byId ? "u.`user_id`=?" : "u.`friendly`=?"} AND NOW() IS NOT NULL
      LIMIT 1`,
     [company, "Staff", "DISAPPROVED", byId ? Number(ref) : ref],
   );
@@ -435,7 +428,7 @@ export async function hospitalAttendanceCount(
   const filter = attendanceFilter(company, staff, date, month);
   const row = await queryOne<CountRow>(
     db,
-    `${FRESH_READ} SELECT COUNT(*) as total FROM attendance` + filter.sql,
+    `SELECT COUNT(*) as total FROM attendance` + filter.sql,
     filter.params,
   );
   return Number(row?.total ?? 0);
@@ -458,8 +451,7 @@ export async function hospitalAttendance(
   const day = DAY_EXPR("a");
   return queryAll<RowDataPacket & AttendanceRow>(
     db,
-    `${FRESH_READ}
-    SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
+    `SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
         u.first AS first_name, u.last AS last_name,
         CASE
             WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NULL THEN 'Void'
@@ -487,8 +479,7 @@ export async function hospitalAttendanceSummary(
   const filter = attendanceFilter(company, staff, date, month);
   return queryOne<SummaryRow>(
     db,
-    `${FRESH_READ}
-      SELECT
+    `SELECT
         SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS total_present,
         SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
         SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes
@@ -508,7 +499,7 @@ export async function hospitalAttendanceStats(
   const filter = attendanceFilter(company, staff, date, month);
   const row = await queryOne<SummaryRow & CountRow>(
     db,
-    `${FRESH_READ} SELECT
+    `SELECT
        COUNT(*) AS total,
        SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS total_present,
        SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
@@ -565,14 +556,14 @@ export async function listOpenShifts(db: Connection, hospitalId: number) {
     }
   >(
     db,
-    `${FRESH_READ}
-     SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img,
+    `SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img,
         TIMESTAMPDIFF(MINUTE, a.check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
      FROM attendance a
      LEFT JOIN user u ON u.user_id = a.user_id
      WHERE a.hospital_id=? AND a.check_out_time IS NULL AND a.check_in_time IS NOT NULL
+       AND a.check_in_time >= DATE_SUB(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00'), INTERVAL 24 HOUR)
      ORDER BY a.check_in_time ASC
-     LIMIT 500`,
+     LIMIT 200`,
     [hospitalId],
   );
 }

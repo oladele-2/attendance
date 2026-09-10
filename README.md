@@ -60,13 +60,18 @@ Optional in **Settings → Build → Build variables**: `NODE_VERSION=22` (the r
 
 Do not enable Worker **Cache** in the dashboard. This app is cookie-session HTML; caching the passcode page is what sent signed-in staff back to `/passcode`.
 
-**Turn Hyperdrive query caching off** for this config. Hyperdrive does not invalidate cached `SELECT`s after check-in `INSERT` or check-out `UPDATE`, so Mark Attendance can still show “Check-in” after the row exists (or “Check-out” after checkout). Connection pooling still works with caching disabled:
+**Enable Hyperdrive query caching with a short lifetime after deploying this version.**
+Roster and report reads may be briefly cached, while authentication, permissions,
+`/verification`, undo, and `/onduty` use real time-dependent SQL expressions that
+Hyperdrive treats as uncacheable. Hyperdrive does not invalidate cached reads after
+writes, so keep this lifetime short:
 
 ```bash
-npx wrangler hyperdrive update 25941e25a10f4290b01888a241f26147 --caching-disabled
+npx wrangler hyperdrive update 25941e25a10f4290b01888a241f26147 --caching-disabled=false --max-age=30 --swr=5
 ```
 
-In the dashboard: Hyperdrive → this config → Caching → Off. Attendance `SELECT`s in the app also include a `NOW()` comment so they are treated as uncacheable if caching is left on.
+In the dashboard: Hyperdrive → this config → Caching → On, maximum age 30 seconds,
+stale-while-revalidate 5 seconds. Do not use SQL comments as cache controls.
 
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
