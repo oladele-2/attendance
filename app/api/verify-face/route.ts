@@ -2,7 +2,7 @@ import { withDb } from "@/lib/db";
 import { getUserById } from "@/lib/queries";
 import { punchAttendance } from "@/lib/attendance";
 import { euclideanDistance, FACE_THRESHOLD, normalizeVector, parseFaceVector } from "@/lib/face";
-import { sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
+import { COOKIE, expiredCookieHeader, sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
   const session = await sessionFromCookieHeader(request.headers.get("cookie"));
@@ -65,25 +65,42 @@ export async function POST(request: Request) {
 
       const punch = await punchAttendance(db, session.user_id!, session.company_id, session.privilege_id!);
       const viaFace = liveFace ? "Face verified. " : "";
+      const signedOut = punch.action === "Checked out";
       return {
         success: true as const,
         status_code: 200,
-        message: `${viaFace}${punch.action}${punch.note}.`,
+        message: signedOut
+          ? `${viaFace}${punch.action}${punch.note}. You are signed out of this device.`
+          : `${viaFace}${punch.action}${punch.note}.`,
+        action: punch.action,
+        attendanceId: punch.attendanceId,
+        redirect: signedOut ? "/scan" : undefined,
       };
     });
 
-    const tokenHeader = await userCookieHeader(nextSession);
+    const headers = new Headers();
+    if (result.success && result.redirect) {
+      headers.append("Set-Cookie", expiredCookieHeader(COOKIE));
+    } else if (result.success) {
+      headers.append("Set-Cookie", await userCookieHeader(nextSession));
+    }
+
     return Response.json(result, {
       status: result.status_code,
-      headers: {
-        "Set-Cookie": tokenHeader,
+      headers,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[verify-face]", message);
+    return Response.json(
+      {
+        success: false,
+        status_code: 500,
+        message: message.startsWith("Check-") || message.startsWith("On-duty")
+          ? message
+          : "We could not save attendance right now. Try again in a moment.",
       },
-    });
-  } catch {
-    return Response.json({
-      success: false,
-      status_code: 500,
-      message: "We could not save attendance right now. Try again in a moment.",
-    });
+      { status: 500 },
+    );
   }
 }

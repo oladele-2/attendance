@@ -26,7 +26,7 @@ export function DirectMarkButton({ label, disabled = false, disabledReason }: Pr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const data = (await res.json()) as { success?: boolean; message?: string };
+      const data = (await res.json()) as { success?: boolean; message?: string; redirect?: string };
       if (res.status === 401) {
         setOk(false);
         setStatus(data.message || "Your session expired. Please sign in again.");
@@ -44,7 +44,9 @@ export function DirectMarkButton({ label, disabled = false, disabledReason }: Pr
       if (data.success) {
         setOk(true);
         setStatus(data.message || "Done");
-        setTimeout(() => window.location.reload(), 700);
+        setTimeout(() => {
+          window.location.href = data.redirect || "/verification";
+        }, 700);
       } else {
         setOk(false);
         setStatus(data.message || "Attendance could not be recorded.");

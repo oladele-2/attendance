@@ -196,7 +196,7 @@ export function FaceCapture({
           ...extraBody,
         }),
       });
-      const data = (await res.json()) as { success?: boolean; message?: string };
+      const data = (await res.json()) as { success?: boolean; message?: string; redirect?: string };
       if (res.status === 401) {
         setOk(false);
         setStatus(data.message || "Your session expired. Please sign in again.");
@@ -215,7 +215,9 @@ export function FaceCapture({
         setStatus(data.message || "Done");
         stopCamera();
         if (mode === "verify") {
-          setTimeout(() => window.location.reload(), 800);
+          setTimeout(() => {
+            window.location.href = data.redirect || "/verification";
+          }, 800);
         }
       } else {
         setOk(false);

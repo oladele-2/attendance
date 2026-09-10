@@ -241,15 +241,25 @@ export async function hospitalAttendanceSummary(
 }
 
 export async function insertCheckIn(db: Connection, userId: number, hospitalId: number) {
-  // Hyperdrive MySQL supports query() text protocol, not COM_STMT_PREPARE.
-  await db.query<ResultSetHeader>(
+  const [result] = await db.query<ResultSetHeader>(
     "INSERT INTO attendance (user_id, check_in_time, hospital_id, status) VALUES (?, NOW(), ?, 0)",
     [userId, hospitalId],
   );
+  if (!result.insertId) {
+    throw new Error("Check-in was not saved to the database.");
+  }
+  return Number(result.insertId);
 }
 
 export async function updateCheckOut(db: Connection, status: number, id: number) {
-  await db.query("UPDATE attendance SET status = ?, check_out_time = NOW() WHERE id = ?", [status, id]);
+  const [result] = await db.query<ResultSetHeader>(
+    "UPDATE attendance SET status = ?, check_out_time = NOW() WHERE id = ? AND check_out_time IS NULL",
+    [status, id],
+  );
+  if (!result.affectedRows) {
+    throw new Error("Check-out was not saved. The shift may already be closed.");
+  }
+  return Number(result.affectedRows);
 }
 
 export async function updateAttendanceDash(
@@ -280,5 +290,11 @@ export async function updateFaceVector(db: Connection, faceVector: string, userI
 }
 
 export async function updatePrivilegeStatus(db: Connection, status: string, id: number) {
-  await db.query("UPDATE `privilege` SET `status`=?, `at`=now() WHERE `id`=?", [status, id]);
+  const [result] = await db.query<ResultSetHeader>("UPDATE `privilege` SET `status`=?, `at`=now() WHERE `id`=?", [
+    status,
+    id,
+  ]);
+  if (!result.affectedRows) {
+    throw new Error("On-duty status was not updated.");
+  }
 }
