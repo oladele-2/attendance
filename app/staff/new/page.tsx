@@ -190,7 +190,7 @@ export default async function NewStaffPage({
             <PendingButton className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#ff8002] px-4 py-3 font-semibold text-white hover:bg-[#d98324] disabled:cursor-not-allowed disabled:bg-gray-400">
               <IconSave size={16} /> Save staff
             </PendingButton>
-            <Link href="/staff" className="rounded-xl bg-slate-100 px-4 py-3 font-medium text-slate-700 hover:bg-slate-200">
+            <Link prefetch={false} href="/staff" className="rounded-xl bg-slate-100 px-4 py-3 font-medium text-slate-700 hover:bg-slate-200">
               Cancel
             </Link>
           </div>

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import type { SessionPayload } from "./types";
 
 export const COOKIE = "attendance_session";
@@ -9,7 +10,10 @@ export const FACILITY_COOKIE = "attendance_facility";
 const USER_MAX_AGE = 60 * 60 * 24 * 14;
 const FACILITY_MAX_AGE = 60 * 60 * 24 * 365 * 10;
 
+let encodedSecret: Uint8Array | undefined;
+
 function sessionSecret() {
+  if (encodedSecret) return encodedSecret;
   let secret: string | undefined;
   try {
     const fromEnv = env.SESSION_SECRET;
@@ -24,7 +28,8 @@ function sessionSecret() {
   if (!secret) {
     throw new Error("SESSION_SECRET is not set on this Worker");
   }
-  return new TextEncoder().encode(secret);
+  encodedSecret = new TextEncoder().encode(secret);
+  return encodedSecret;
 }
 
 function tokenFromCookieHeader(header: string | null | undefined, name: string) {
@@ -83,16 +88,15 @@ export async function sessionFromCookieHeader(header: string | null | undefined)
   return mergeSession(facility, user);
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+async function readSession(): Promise<SessionPayload | null> {
   let header: string | null = null;
   try {
     header = (await headers()).get("cookie");
   } catch {
     header = null;
   }
-  if (header) {
-    const fromHeader = await sessionFromCookieHeader(header);
-    if (fromHeader) return fromHeader;
+  if (header != null) {
+    return sessionFromCookieHeader(header);
   }
   try {
     const jar = await cookies();
@@ -103,6 +107,9 @@ export async function getSession(): Promise<SessionPayload | null> {
     return null;
   }
 }
+
+/** Per-request memoization only — not page/data/Hyperdrive cache. */
+export const getSession = cache(readSession);
 
 export async function setSession(payload: SessionPayload) {
   const jar = await cookies();

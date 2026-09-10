@@ -3,7 +3,7 @@ import { PrintIdsButton } from "@/components/PrintIdsButton";
 import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { formatAddress } from "@/lib/brand";
-import { companyStaffCount, companyStaffPage, getCompanyById, getUserById } from "@/lib/queries";
+import { companyStaffCount, companyStaffPage, getCompanyById } from "@/lib/queries";
 import Link from "next/link";
 
 export default async function QrCodesPage({
@@ -20,19 +20,18 @@ export default async function QrCodesPage({
   const { cards, total, company } = await withDb(async (db) => {
     const company = await getCompanyById(db, session.company_id);
     const total = await companyStaffCount(db, session.company_id);
-    const ids = await companyStaffPage(db, session.company_id, offset, limit);
+    const rows = await companyStaffPage(db, session.company_id, offset, limit);
     const cards = [];
-    for (const row of ids) {
-      const user = await getUserById(db, row.user_id);
-      if (!user) continue;
+    for (const row of rows) {
+      if (!row.user_id) continue;
       cards.push({
-        user_id: user.user_id,
-        name: `${user.first} ${user.last}`.trim(),
+        user_id: row.user_id,
+        name: `${row.first ?? ""} ${row.last ?? ""}`.trim(),
         role: row.privilege || "Staff",
-        gender: user.gender,
-        phone: user.pre && user.phone ? `+${user.pre}${user.phone}` : null,
-        staffId: String(user.user_id),
-        photo: user.img,
+        gender: row.gender,
+        phone: row.pre && row.phone ? `+${row.pre}${row.phone}` : null,
+        staffId: String(row.user_id),
+        photo: row.img,
       });
     }
     return { cards, total, company };
@@ -62,7 +61,11 @@ export default async function QrCodesPage({
       />
       <div className="mt-6 flex justify-center gap-3 print:hidden">
         {page > 1 ? (
-          <Link href={`/qrcodes?page=${page - 1}`} className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+          <Link
+            prefetch={false}
+            href={`/qrcodes?page=${page - 1}`}
+            className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200"
+          >
             Previous
           </Link>
         ) : null}
@@ -70,7 +73,11 @@ export default async function QrCodesPage({
           {page} / {pages}
         </span>
         {page < pages ? (
-          <Link href={`/qrcodes?page=${page + 1}`} className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+          <Link
+            prefetch={false}
+            href={`/qrcodes?page=${page + 1}`}
+            className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200"
+          >
             Next
           </Link>
         ) : null}

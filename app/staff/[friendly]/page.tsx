@@ -1,7 +1,7 @@
 import { FaceCapture } from "@/components/FaceCapture";
 import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
-import { getPrivilegeAtCompany, getUserByFriendly, getUserById } from "@/lib/queries";
+import { getFacilityStaffProfile } from "@/lib/queries";
 import { notFound } from "next/navigation";
 import { IconScanFace, IconUser } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
@@ -17,18 +17,7 @@ export default async function RegisterFacePage({
   const session = await requireAdmin();
   const { friendly } = await params;
   const query = await searchParams;
-  const staff = await withDb(async (db) => {
-    const user = /^\d+$/.test(friendly)
-      ? await getUserById(db, Number(friendly))
-      : await (async () => {
-          const ref = await getUserByFriendly(db, friendly);
-          return ref ? getUserById(db, ref.user_id) : null;
-        })();
-    if (!user) return null;
-    const privilege = await getPrivilegeAtCompany(db, user.user_id, session.company_id);
-    if (!privilege) return null;
-    return user;
-  });
+  const staff = await withDb((db) => getFacilityStaffProfile(db, friendly, session.company_id));
   if (!staff) notFound();
 
   return (
@@ -43,7 +32,7 @@ export default async function RegisterFacePage({
         <FlashBanner notice={query.notice} error={query.error} className="mx-auto mt-4 max-w-lg" />
         <p className="mt-2 mb-6 flex items-center justify-center gap-2 text-slate-600">
           <IconScanFace size={16} />
-          {staff.face_vector
+          {Number(staff.has_face) > 0
             ? "A face template is already saved. You can update it."
             : "No face template yet. Register one so this staff member can use face check-in."}
         </p>
@@ -51,9 +40,9 @@ export default async function RegisterFacePage({
           mode="register"
           endpoint="/api/save-face"
           extraBody={{ user_id: staff.user_id }}
-          buttonLabel={staff.face_vector ? "Update face template" : "Save face template"}
+          buttonLabel={Number(staff.has_face) > 0 ? "Update face template" : "Save face template"}
         />
-        <Link href="/staff" className="mt-6 inline-block text-sm font-semibold text-[#ff8002] hover:underline">
+        <Link prefetch={false} href="/staff" className="mt-6 inline-block text-sm font-semibold text-[#ff8002] hover:underline">
           Back to staff list
         </Link>
       </div>

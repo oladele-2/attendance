@@ -73,7 +73,7 @@ export default async function EditAttendancePage({
             <PendingButton className="inline-flex items-center gap-2 rounded-xl bg-[#ff8002] px-4 py-2.5 font-semibold text-white hover:bg-[#d98324] disabled:cursor-not-allowed disabled:bg-gray-400">
               <IconSave size={16} /> Save
             </PendingButton>
-            <Link href="/dashboard" className="rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-200">
+            <Link prefetch={false} href="/dashboard" className="rounded-xl bg-slate-100 px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-200">
               Cancel
             </Link>
           </div>

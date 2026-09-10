@@ -4,10 +4,10 @@ import { FlashBanner } from "@/components/FlashBanner";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import {
+  getUserContact,
   countShiftsToday,
   getLatestCompletedToday,
   getOpenAttendance,
-  getUserById,
 } from "@/lib/queries";
 import { actionDate, parseDateTime } from "@/lib/dates";
 import { isoDate } from "@/lib/face";
@@ -37,7 +37,7 @@ export default async function VerificationPage({
 
   try {
     const result = await withDb(async (db) => {
-      const foundUser = await getUserById(db, session.user_id!);
+      const foundUser = await getUserContact(db, session.user_id!);
       const open = await getOpenAttendance(db, session.user_id!, session.company_id);
       const completed = await getLatestCompletedToday(db, session.user_id!, session.company_id, today);
       const count = await countShiftsToday(db, session.user_id!, session.company_id, today);

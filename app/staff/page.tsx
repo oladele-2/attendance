@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
-import { companyStaffCount, companyStaffPage, getUserById } from "@/lib/queries";
+import { companyStaffCount, companyStaffPage } from "@/lib/queries";
 import { IconCheck, IconUser, IconUserPlus, IconUsers, IconXCircle } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
 
@@ -18,13 +18,7 @@ export default async function StaffPage({
 
   const { rows, total } = await withDb(async (db) => {
     const total = await companyStaffCount(db, session.company_id);
-    const ids = await companyStaffPage(db, session.company_id, offset, limit);
-    const rows = await Promise.all(
-      ids.map(async (row) => {
-        const staff = await getUserById(db, row.user_id);
-        return { staff, privilege: row.privilege, onDuty: row.status === "Staff" };
-      }),
-    );
+    const rows = await companyStaffPage(db, session.company_id, offset, limit);
     return { rows, total };
   });
 
@@ -73,21 +67,22 @@ export default async function StaffPage({
                 </td>
               </tr>
             ) : (
-              rows.map(({ staff, privilege, onDuty }) =>
-                staff ? (
-                  <tr key={staff.user_id} className="border-t border-slate-100 hover:bg-slate-50">
+              rows.map((row) =>
+                row.user_id ? (
+                  <tr key={row.user_id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="p-4">
                       <Link
-                        href={`/staff/${staff.friendly || staff.user_id}`}
+                        prefetch={false}
+                        href={`/staff/${row.friendly || row.user_id}`}
                         className="inline-flex items-center gap-2 font-medium text-[#ff8002] hover:underline"
                       >
                         <IconUser size={16} />
-                        {staff.first} {staff.last}
+                        {row.first} {row.last}
                       </Link>
                     </td>
-                    <td className="p-4 text-slate-600">{privilege || "Staff"}</td>
+                    <td className="p-4 text-slate-600">{row.privilege || "Staff"}</td>
                     <td className="p-4">
-                      {staff.face_vector ? (
+                      {Number(row.has_face) > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
                           <IconCheck size={12} /> Registered
                         </span>
@@ -98,7 +93,7 @@ export default async function StaffPage({
                       )}
                     </td>
                     <td className="p-4">
-                      {onDuty ? (
+                      {row.status === "Staff" ? (
                         <span className="text-xs font-semibold text-green-700">On duty</span>
                       ) : (
                         <span className="text-xs text-slate-500">Off duty</span>
@@ -113,7 +108,11 @@ export default async function StaffPage({
       </div>
       <div className="mt-4 flex justify-center gap-3">
         {page > 1 ? (
-          <Link href={`/staff?page=${page - 1}`} className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+          <Link
+            prefetch={false}
+            href={`/staff?page=${page - 1}`}
+            className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200"
+          >
             Prev
           </Link>
         ) : null}
@@ -121,7 +120,11 @@ export default async function StaffPage({
           {page} / {pages}
         </span>
         {page < pages ? (
-          <Link href={`/staff?page=${page + 1}`} className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200">
+          <Link
+            prefetch={false}
+            href={`/staff?page=${page + 1}`}
+            className="rounded-lg bg-white px-3 py-1.5 shadow-sm ring-1 ring-slate-200"
+          >
             Next
           </Link>
         ) : null}

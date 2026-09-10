@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import {
-  getUserById,
+  getUserName,
   hospitalAttendance,
   hospitalAttendanceCount,
   hospitalAttendanceSummary,
@@ -32,14 +32,14 @@ export default async function DashboardPage({
   let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
   let total = 0;
   let summary: Awaited<ReturnType<typeof hospitalAttendanceSummary>> = null;
-  let staffName: Awaited<ReturnType<typeof getUserById>> = null;
+  let staffName: Awaited<ReturnType<typeof getUserName>> = null;
   let loadError = params.error;
   try {
     const result = await withDb(async (db) => {
       const total = await hospitalAttendanceCount(db, session.company_id, staff, date, month);
       const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, date, month);
       const summary = await hospitalAttendanceSummary(db, session.company_id, staff, date, month);
-      const staffName = staff ? await getUserById(db, staff) : null;
+      const staffName = staff ? await getUserName(db, staff) : null;
       return { rows, total, summary, staffName };
     });
     rows = result.rows;
@@ -64,6 +64,10 @@ export default async function DashboardPage({
   if (staff) query.set("staff", String(staff));
   if (date) query.set("date", date);
   if (month) query.set("month", month);
+  const prevQuery = new URLSearchParams(query);
+  prevQuery.set("page", String(page - 1));
+  const nextQuery = new URLSearchParams(query);
+  nextQuery.set("page", String(page + 1));
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -153,7 +157,11 @@ export default async function DashboardPage({
                     <tr key={attend.id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-3 py-3 text-slate-400">{offset + ky + 1}</td>
                       <td className="px-3 py-3">
-                        <Link href={`/dashboard?staff=${attend.user_id}`} className="inline-flex items-center gap-1 font-medium text-[#ff8002] hover:underline">
+                        <Link
+                          prefetch={false}
+                          href={`/dashboard?staff=${attend.user_id}`}
+                          className="inline-flex items-center gap-1 font-medium text-[#ff8002] hover:underline"
+                        >
                           <IconUsers size={14} />
                           {attend.first_name ? `${attend.first_name} ${attend.last_name}` : attend.user_id}
                         </Link>
@@ -182,6 +190,7 @@ export default async function DashboardPage({
                         {session.privilege === "CEO" ? (
                           <div className="flex gap-2">
                             <Link
+                              prefetch={false}
                               href={`/dashboard/${attend.id}/edit`}
                               className="inline-flex items-center gap-1 rounded-lg bg-[#fff4ea] px-2 py-1 text-xs font-semibold text-[#d98324] hover:bg-[#ff8002] hover:text-white"
                             >
@@ -201,22 +210,28 @@ export default async function DashboardPage({
           </table>
         </div>
 
-        <nav className="mt-5 flex flex-wrap justify-center gap-2">
-          {Array.from({ length: pages }, (_, i) => i + 1).map((i) => {
-            const qs = new URLSearchParams(query);
-            qs.set("page", String(i));
-            return (
-              <Link
-                key={i}
-                href={`/dashboard?${qs.toString()}`}
-                className={`min-w-9 rounded-lg px-3 py-1.5 text-center text-sm ${
-                  i === page ? "bg-[#ff8002] font-semibold text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {i}
-              </Link>
-            );
-          })}
+        <nav className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {page > 1 ? (
+            <Link
+              prefetch={false}
+              href={`/dashboard?${prevQuery.toString()}`}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Prev
+            </Link>
+          ) : null}
+          <span className="px-3 py-1.5 text-sm text-slate-600">
+            {page} / {pages}
+          </span>
+          {page < pages ? (
+            <Link
+              prefetch={false}
+              href={`/dashboard?${nextQuery.toString()}`}
+              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Next
+            </Link>
+          ) : null}
         </nav>
       </div>
     </main>

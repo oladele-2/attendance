@@ -1,5 +1,5 @@
 import { withDb } from "@/lib/db";
-import { getUserById } from "@/lib/queries";
+import { getUserFaceVector } from "@/lib/queries";
 import { punchAttendance } from "@/lib/attendance";
 import { euclideanDistance, FACE_THRESHOLD, normalizeVector, parseFaceVector } from "@/lib/face";
 import { COOKIE, expiredCookieHeader, sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   try {
     const result = await withDb(async (db) => {
       if (liveFace) {
-        const user = await getUserById(db, session.user_id!);
+        const user = await getUserFaceVector(db, session.user_id!);
         const stored = user?.face_vector ? parseFaceVector(user.face_vector) : null;
         if (!stored) {
           return {

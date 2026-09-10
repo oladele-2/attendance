@@ -8,7 +8,6 @@ import {
   getCompanyById,
   getPrivilegeAtCompany,
   getUserByEmail,
-  getUserById,
   getUserByPhone,
   getUserPrivileges,
   insertPrivilege,
