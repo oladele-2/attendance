@@ -183,20 +183,46 @@ export async function staffPrivilegePage(
   );
 }
 
-export async function companyStaffCount(db: Connection, company: number) {
+function rosterEmployeeWhere(company: number, search?: string) {
+  let sql = ` WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
+       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'`;
+  const params: unknown[] = [company, "Staff", "DISAPPROVED"];
+  const term = search?.trim();
+  if (term) {
+    const like = `%${term.replace(/[%_\\]/g, "")}%`;
+    const digits = term.replace(/\D/g, "");
+    sql += ` AND (
+        u.\`first\` LIKE ? OR u.\`last\` LIKE ? OR u.\`email\` LIKE ?
+        OR CONCAT(u.\`first\`, ' ', u.\`last\`) LIKE ?
+        OR u.\`phone\` LIKE ? OR CONCAT(u.\`pre\`, u.\`phone\`) LIKE ?
+      )`;
+    params.push(like, like, like, like, like, digits ? `%${digits}%` : like);
+  }
+  return { sql, params };
+}
+
+export async function companyStaffCount(db: Connection, company: number, search?: string) {
+  const filter = rosterEmployeeWhere(company, search);
   const row = await queryOne<CountRow>(
     db,
     `${FRESH_READ} SELECT COUNT(*) AS total FROM \`privilege\` p
-     WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
-       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'`,
-    [company, "Staff", "DISAPPROVED"],
+     LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
+     ${filter.sql}`,
+    filter.params,
   );
   return Number(row?.total ?? 0);
 }
 
-export async function companyStaffPage(db: Connection, company: number, offset: number, limit: number) {
+export async function companyStaffPage(
+  db: Connection,
+  company: number,
+  offset: number,
+  limit: number,
+  search?: string,
+) {
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeLimit = Math.max(1, Number(limit) || 10);
+  const filter = rosterEmployeeWhere(company, search);
   return queryAll<
     RowDataPacket & {
       user_id: number;
@@ -218,10 +244,9 @@ export async function companyStaffPage(db: Connection, company: number, offset: 
         IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
      FROM \`privilege\` p
      LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
-     WHERE p.\`company\`=? AND (p.\`status\`=? OR p.\`status\`=?)
-       AND LOWER(TRIM(p.\`privilege\`)) <> 'patient'
+     ${filter.sql}
      ORDER BY u.\`last\`, u.\`first\` LIMIT ${safeOffset},${safeLimit}`,
-    [company, "Staff", "DISAPPROVED"],
+    filter.params,
   );
 }
 
@@ -286,13 +311,14 @@ export async function insertUser(
     phone: string;
     dob: string;
     home: string;
+    img: string;
   },
 ) {
   const [result] = await db.query<ResultSetHeader>(
     `INSERT INTO \`user\` (
       \`first\`, \`last\`, \`identity\`, \`friendly\`, \`email\`, \`pre\`, \`phone\`, \`pass\`,
       \`img\`, \`gender\`, \`dob\`, \`home\`, \`town\`, \`country\`, \`date_city\`, \`status\`, \`at\`
-    ) VALUES (?, ?, '', ?, ?, ?, ?, ?, 'patient.png', ?, ?, ?, '', 'Nigeria', 'Africa/Lagos', 'APPROVED', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))`,
+    ) VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 'Nigeria', 'Africa/Lagos', 'APPROVED', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))`,
     [
       input.first,
       input.last,
@@ -301,6 +327,7 @@ export async function insertUser(
       input.pre,
       input.phone,
       input.pass,
+      input.img,
       input.gender,
       input.dob,
       input.home,
@@ -450,6 +477,50 @@ export async function updateCheckOut(db: Connection, status: number, id: number)
     throw new Error("Check-out was not saved. The shift may already be closed.");
   }
   return Number(result.affectedRows);
+}
+
+export async function listOpenShifts(db: Connection, hospitalId: number) {
+  return queryAll<
+    RowDataPacket & {
+      id: number;
+      user_id: number;
+      check_in_time: string;
+      first: string | null;
+      last: string | null;
+      img: string | null;
+      pre: string | null;
+      phone: string | null;
+      privilege: string | null;
+      minutes_open: number;
+    }
+  >(
+    db,
+    `${FRESH_READ}
+     SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img, u.pre, u.phone,
+        p.privilege, TIMESTAMPDIFF(MINUTE, a.check_in_time, NOW()) AS minutes_open
+     FROM attendance a
+     LEFT JOIN user u ON u.user_id = a.user_id
+     LEFT JOIN privilege p ON CAST(TRIM(p.user_id) AS UNSIGNED) = a.user_id AND p.company = a.hospital_id
+     WHERE a.hospital_id=? AND a.check_in_time IS NOT NULL AND a.check_out_time IS NULL
+     ORDER BY a.check_in_time ASC`,
+    [hospitalId],
+  );
+}
+
+export async function deleteOwnOpenCheckIn(db: Connection, id: number, userId: number, hospitalId: number) {
+  const [result] = await db.query<ResultSetHeader>(
+    "DELETE FROM attendance WHERE id=? AND user_id=? AND hospital_id=? AND check_out_time IS NULL",
+    [id, userId, hospitalId],
+  );
+  return result.affectedRows > 0;
+}
+
+export async function reopenOwnCheckOut(db: Connection, id: number, userId: number, hospitalId: number) {
+  const [result] = await db.query<ResultSetHeader>(
+    "UPDATE attendance SET check_out_time=NULL, status=0 WHERE id=? AND user_id=? AND hospital_id=? AND check_out_time IS NOT NULL",
+    [id, userId, hospitalId],
+  );
+  return result.affectedRows > 0;
 }
 
 export async function updateAttendanceDash(

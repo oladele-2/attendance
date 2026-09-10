@@ -1,11 +1,16 @@
 import type { Connection } from "mysql2/promise";
 import {
+  deleteOwnOpenCheckIn,
+  getAttendanceById,
   getOpenAttendance,
   insertCheckIn,
+  reopenOwnCheckOut,
   updateCheckOut,
   updatePrivilegeStatus,
 } from "./queries";
-import { isoDate } from "./face";
+import { isoDate, parseDateTime } from "./dates";
+
+export const UNDO_SECONDS = 120;
 
 export async function punchAttendance(
   db: Connection,
@@ -17,7 +22,6 @@ export async function punchAttendance(
 
   if (open?.check_in_time && !open.check_out_time) {
     await updateCheckOut(db, 1, open.id);
-    // Same as PHP compare_verification.php: off-duty on AjirMed.
     await updatePrivilegeStatus(db, "DISAPPROVED", privilegeId);
     const checkInDay = isoDate(open.check_in_time);
     const today = isoDate();
@@ -40,4 +44,32 @@ export async function punchAttendance(
     attendanceId,
     signedOut: false,
   };
+}
+
+export async function undoAttendance(
+  db: Connection,
+  userId: number,
+  companyId: number,
+  privilegeId: number,
+  attendanceId: number,
+) {
+  const row = await getAttendanceById(db, attendanceId);
+  if (!row || Number(row.user_id) !== userId || Number(row.hospital_id) !== companyId) {
+    throw new Error("That punch could not be undone.");
+  }
+  const stamp = row.check_out_time || row.check_in_time;
+  const when = parseDateTime(stamp);
+  if (!when || Date.now() - when.getTime() > UNDO_SECONDS * 1000) {
+    throw new Error("The undo window has closed (2 minutes).");
+  }
+  if (row.check_out_time) {
+    const ok = await reopenOwnCheckOut(db, attendanceId, userId, companyId);
+    if (!ok) throw new Error("That punch could not be undone.");
+    await updatePrivilegeStatus(db, "Staff", privilegeId);
+    return { action: "undid-checkout" as const };
+  }
+  const ok = await deleteOwnOpenCheckIn(db, attendanceId, userId, companyId);
+  if (!ok) throw new Error("That punch could not be undone.");
+  await updatePrivilegeStatus(db, "DISAPPROVED", privilegeId);
+  return { action: "undid-checkin" as const };
 }

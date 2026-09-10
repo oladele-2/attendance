@@ -6,6 +6,7 @@ export const NOTICE_COPY: Record<string, string> = {
   "face-saved": "Face template saved.",
   "staff-added": "Staff account created. Register a face if they will use face check-in.",
   "staff-linked": "This person already has an AjirMed account. They can now sign in at this facility.",
+  "shift-closed": "Open shift closed (checked out).",
 };
 
 export const ERROR_COPY: Record<string, string> = {

@@ -29,6 +29,11 @@ export function PasswordToggle({
         placeholder={placeholder}
         required={required}
         autoComplete={autoComplete}
+        autoCorrect="off"
+        spellCheck={false}
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-form-type="other"
         className="w-full rounded-xl border border-slate-300 py-3 pr-12 pl-10 outline-none focus:border-[#ff8002] focus:ring-2 focus:ring-[#ff8002]/20"
       />
       <button

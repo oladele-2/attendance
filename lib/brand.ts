@@ -6,6 +6,7 @@ export const BRAND = {
   ink: "#1c1917",
   tagline: "Excellence in specialized care.",
   assetHost: "https://attendance.ajirmed.com",
+  photoHost: "https://users.ajirmed.com",
   values: [
     { title: "Integrity", text: "We do what is right." },
     { title: "Compassion", text: "We care with kindness." },
@@ -44,7 +45,17 @@ export function photoSrc(img?: string | null) {
   const generic = ["staff.png", "patient.png", "default.png"];
   if (generic.includes(img.toLowerCase())) return null;
   if (/^https?:\/\//i.test(img)) return img;
-  return `${BRAND.assetHost}/img/${img}`;
+  return `${BRAND.photoHost}/${img.replace(/^\/+/, "")}`;
+}
+
+export function normalizePhotoFilename(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "patient.png";
+  if (/^https?:\/\/users\.ajirmed\.com\//i.test(trimmed)) {
+    return trimmed.replace(/^https?:\/\/users\.ajirmed\.com\//i, "").split("?")[0];
+  }
+  const name = trimmed.split("/").pop() ?? trimmed;
+  return /^[A-Za-z0-9._-]+$/.test(name) ? name : "patient.png";
 }
 
 export function formatAddress(parts: Array<string | null | undefined>) {

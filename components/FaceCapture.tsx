@@ -46,6 +46,7 @@ type Props = {
   requireFace?: boolean;
   disabled?: boolean;
   disabledReason?: string;
+  confirmLabel?: string;
 };
 
 export function FaceCapture({
@@ -56,6 +57,7 @@ export function FaceCapture({
   requireFace = true,
   disabled = false,
   disabledReason,
+  confirmLabel,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -66,12 +68,14 @@ export function FaceCapture({
   const [faceReady, setFaceReady] = useState(false);
   const [ok, setOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attendanceId, setAttendanceId] = useState<number | null>(null);
+  const [undoLeft, setUndoLeft] = useState(0);
   const descriptorRef = useRef<number[] | null>(null);
   const timerRef = useRef<number | undefined>(undefined);
   const streamRef = useRef<MediaStream | undefined>(undefined);
   const cancelledRef = useRef(false);
 
-  function stopCamera() {
+  function stopCamera(options?: { keepStatus?: boolean }) {
     cancelledRef.current = true;
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = undefined;
@@ -81,7 +85,9 @@ export function FaceCapture({
     descriptorRef.current = null;
     setFaceReady(false);
     setCameraOn(false);
-    setStatus("Camera is off. Use Check-in / Check-out, or open the camera for face recognition.");
+    if (!options?.keepStatus) {
+      setStatus("Camera is off. Use Check-in / Check-out, or open the camera for face recognition.");
+    }
   }
 
   useEffect(() => {
@@ -91,6 +97,18 @@ export function FaceCapture({
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  useEffect(() => {
+    if (undoLeft <= 0) return;
+    const tick = window.setInterval(() => setUndoLeft((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearInterval(tick);
+  }, [undoLeft > 0]);
+
+  useEffect(() => {
+    if (mode === "verify" && ok && attendanceId && undoLeft === 0) {
+      window.location.href = "/verification";
+    }
+  }, [mode, ok, attendanceId, undoLeft]);
 
   async function openCamera() {
     cancelledRef.current = false;
@@ -184,6 +202,7 @@ export function FaceCapture({
       setStatus("No clear face captured. Look at the camera and try again.");
       return;
     }
+    if (mode === "verify" && confirmLabel && !window.confirm(confirmLabel)) return;
     setBusy(true);
     setOk(null);
     setStatus(mode === "verify" ? "Recording attendance..." : "Saving face template...");
@@ -196,7 +215,13 @@ export function FaceCapture({
           ...extraBody,
         }),
       });
-      const data = (await res.json()) as { success?: boolean; message?: string; redirect?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        message?: string;
+        redirect?: string;
+        attendanceId?: number;
+        undoSeconds?: number;
+      };
       if (res.status === 401) {
         setOk(false);
         setStatus(data.message || "Your session expired. Please sign in again.");
@@ -213,11 +238,10 @@ export function FaceCapture({
       if (data.success) {
         setOk(true);
         setStatus(data.message || "Done");
-        stopCamera();
+        stopCamera({ keepStatus: true });
         if (mode === "verify") {
-          setTimeout(() => {
-            window.location.href = data.redirect || "/verification";
-          }, 800);
+          setAttendanceId(data.attendanceId ?? null);
+          setUndoLeft(data.undoSeconds ?? 120);
         }
       } else {
         setOk(false);
@@ -227,6 +251,34 @@ export function FaceCapture({
       setOk(false);
       setStatus("Network error. Check your connection and try again.");
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function undo() {
+    if (!attendanceId) return;
+    setBusy(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ undo: true, attendanceId }),
+      });
+      const data = (await res.json()) as { success?: boolean; message?: string };
+      if (data.success) {
+        setStatus(data.message || "Undone");
+        setUndoLeft(0);
+        window.setTimeout(() => {
+          window.location.href = "/verification";
+        }, 800);
+      } else {
+        setOk(false);
+        setStatus(data.message || "Could not undo.");
+        setBusy(false);
+      }
+    } catch {
+      setOk(false);
+      setStatus("Network error. Try again.");
       setBusy(false);
     }
   }
@@ -248,7 +300,7 @@ export function FaceCapture({
         {status}
       </p>
       {cameraOn ? (
-        <button type="button" onClick={stopCamera} className="mt-2 text-sm font-semibold text-slate-600 hover:text-[#a40606]">
+        <button type="button" onClick={() => stopCamera()} className="mt-2 text-sm font-semibold text-slate-600 hover:text-[#a40606]">
           Close camera
         </button>
       ) : (
@@ -263,13 +315,18 @@ export function FaceCapture({
       )}
       <button
         type="button"
-        disabled={disabled || busy || (requireFace && !faceReady)}
+        disabled={disabled || busy || undoLeft > 0 || (requireFace && !faceReady)}
         onClick={submit}
         className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#ff8002] px-5 py-2.5 font-semibold text-white hover:bg-[#d98324] disabled:cursor-not-allowed disabled:bg-gray-400"
       >
         <IconScanFace size={18} />
         {busy ? "Please wait..." : buttonLabel}
       </button>
+      {mode === "verify" && ok && undoLeft > 0 && attendanceId ? (
+        <button type="button" onClick={() => void undo()} className="mt-3 text-sm font-semibold text-[#a40606] underline">
+          Undo ({undoLeft}s)
+        </button>
+      ) : null}
       {disabled ? (
         <p className="mt-2 text-center text-xs text-slate-500">
           {disabledReason || "Face marking is unavailable right now."}

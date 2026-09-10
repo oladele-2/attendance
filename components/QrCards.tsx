@@ -157,7 +157,7 @@ function IdFront({ card, facility }: { card: IdCardData; facility: FacilityBrand
   const org = splitOrgName(facility.name);
   const person = splitPersonName(card.name);
   const logo = logoSrc(facility.logo);
-  const photo = photoSrc(card.photo);
+  const photo = photoSrc(card.photo) ?? `${BRAND.photoHost}/patient.png`;
   const tagline = facility.tagline?.trim() || BRAND.tagline;
 
   return (

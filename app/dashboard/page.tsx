@@ -9,7 +9,7 @@ import {
   hospitalAttendanceSummary,
 } from "@/lib/queries";
 import { actionDate, formatLongDate, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
-import { isoDate } from "@/lib/face";
+import { isoDate } from "@/lib/dates";
 import { attendanceExportPath } from "@/lib/report-csv";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
 import { FlashBanner } from "@/components/FlashBanner";

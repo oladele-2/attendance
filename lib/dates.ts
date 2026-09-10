@@ -1,3 +1,6 @@
+export const APP_TZ = "Africa/Lagos";
+export const APP_TZ_OFFSET = "+01:00";
+
 const MONTHS = [
   "January",
   "February",
@@ -13,7 +16,31 @@ const MONTHS = [
   "December",
 ];
 
-/** Parse MySQL DATETIME / Date / ISO without throwing on Workers. */
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function lagosParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: APP_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: Number(get("hour")),
+    minute: get("minute"),
+  };
+}
+
+/** Parse MySQL DATETIME as Africa/Lagos wall time (no DST). */
 export function parseDateTime(value: unknown): Date | null {
   if (value == null || value === "") return null;
   if (value instanceof Date) {
@@ -27,7 +54,7 @@ export function parseDateTime(value: unknown): Date | null {
   if (!raw || raw === "[object Object]") return null;
   const mysql = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
   if (mysql) {
-    const date = new Date(`${mysql[1]}T${mysql[2]}`);
+    const date = new Date(`${mysql[1]}T${mysql[2]}${APP_TZ_OFFSET}`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
   const date = new Date(raw);
@@ -38,22 +65,27 @@ function asDate(value: string | Date | null | undefined): Date | null {
   return parseDateTime(value);
 }
 
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-/** Workers-safe clock string — avoid locale APIs that can throw on the edge. */
 function clock(date: Date) {
-  let hour = date.getHours();
-  const minute = pad2(date.getMinutes());
+  const { hour, minute } = lagosParts(date);
   const ampm = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12;
-  if (hour === 0) hour = 12;
-  return `${hour}:${minute} ${ampm}`;
+  let h = hour % 12;
+  if (h === 0) h = 12;
+  return `${h}:${minute} ${ampm}`;
 }
 
 function shortDay(date: Date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const { year, month, day } = lagosParts(date);
+  return `${year}-${month}-${day}`;
+}
+
+export function isoDate(d: Date | string | number | null | undefined = new Date()) {
+  const date = d instanceof Date || d == null ? (d ?? new Date()) : parseDateTime(d);
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return shortDay(date);
+}
+
+export function lagosClockNow() {
+  return clock(new Date());
 }
 
 export function actionDate(value: string | Date | null | undefined) {
@@ -74,7 +106,6 @@ export function actionDate(value: string | Date | null | undefined) {
   if (diff < 3600) return `${Math.floor(diff / 60)} mins ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
   if (diff < 172800) return `Yesterday ${time}`;
-  if (diff < 604800) return `${shortDay(date)} ${time}`;
   return `${shortDay(date)} ${time}`;
 }
 
@@ -105,7 +136,7 @@ export function isoDateValue(value: string | Date | null | undefined) {
   if (match) return match[1];
   const date = parseDateTime(value);
   if (!date) return "";
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return shortDay(date);
 }
 
 export function clockTimeValue(value: string | Date | null | undefined) {
@@ -116,5 +147,6 @@ export function clockTimeValue(value: string | Date | null | undefined) {
 }
 
 export function currentMonthIso(value: Date = new Date()) {
-  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}`;
+  const { year, month } = lagosParts(value);
+  return `${year}-${month}`;
 }

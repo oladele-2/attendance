@@ -10,7 +10,7 @@ import {
   getOpenAttendance,
 } from "@/lib/queries";
 import { actionDate, parseDateTime } from "@/lib/dates";
-import { isoDate } from "@/lib/face";
+import { isoDate } from "@/lib/dates";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
 
 function asText(value: unknown) {
@@ -134,6 +134,7 @@ export default async function VerificationPage({
 
         <DirectMarkButton
           label={buttonLabel}
+          personName={`${session.first ?? ""} ${session.last ?? ""}`.trim()}
           disabled={!canPunch}
           disabledReason={
             loadError
@@ -154,6 +155,11 @@ export default async function VerificationPage({
             mode="verify"
             endpoint="/api/verify-face"
             buttonLabel={openShift ? "Check-out with face" : "Check-in with face"}
+            confirmLabel={
+              openShift
+                ? `Check out now for ${session.first ?? ""} ${session.last ?? ""}?`
+                : `Check in now for ${session.first ?? ""} ${session.last ?? ""}? This will be recorded immediately.`
+            }
             requireFace
             disabled={!canPunch}
             disabledReason={

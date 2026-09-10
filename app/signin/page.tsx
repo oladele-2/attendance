@@ -40,6 +40,13 @@ export default async function SignInPage({
                 name="member_email"
                 required
                 placeholder="name@hospital.com or 080..."
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 className="w-full rounded-xl border border-slate-300 py-3 pr-3 pl-10 outline-none focus:border-[#ff8002] focus:ring-2 focus:ring-[#ff8002]/20"
               />
             </div>
@@ -48,7 +55,7 @@ export default async function SignInPage({
             <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-700">
               Password
             </label>
-            <PasswordToggle />
+            <PasswordToggle autoComplete="off" />
           </div>
           <PendingButton className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff8002] py-3.5 font-bold text-white hover:bg-[#d98324] disabled:bg-gray-400">
             <IconLogIn size={18} />

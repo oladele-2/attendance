@@ -5,6 +5,7 @@ import { FlashBanner } from "@/components/FlashBanner";
 import { PasswordToggle } from "@/components/PasswordToggle";
 import { PendingButton } from "@/components/PendingButton";
 import { IconMail, IconPhone, IconSave, IconUserPlus } from "@/components/icons";
+import { StaffPhotoField } from "@/components/StaffPhoto";
 
 const ROLES = ["Staff", "Nurse", "Doctor", "Lab Scientist", "Security", "Reception", "Admin"];
 
@@ -159,6 +160,7 @@ export default async function NewStaffPage({
               className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#ff8002] focus:ring-2 focus:ring-[#ff8002]/20"
             />
           </div>
+          <StaffPhotoField />
           <div>
             <label htmlFor="new-password" className="mb-1 block text-sm font-semibold text-slate-700">
               Password

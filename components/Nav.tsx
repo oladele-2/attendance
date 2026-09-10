@@ -35,6 +35,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
     { href: "/dashboard", label: "Performance", icon: IconChart, show: loggedIn },
     { href: "/hours", label: "My hours", icon: IconClock, show: loggedIn },
     { href: "/staff", label: "Staff", icon: IconUsers, show: admin },
+    { href: "/duty", label: "On duty", icon: IconUsers, show: admin },
     { href: "/verification", label: "Mark", icon: IconScanFace, show: loggedIn },
     { href: "/qrcodes", label: "Codes", icon: IconQr, show: admin },
     { href: "/logout", label: "Logout", icon: IconLogOut, show: loggedIn },

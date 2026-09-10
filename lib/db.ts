@@ -36,13 +36,9 @@ function secretsPresent() {
   };
 }
 
-function tzOffset(): string {
-  const minutes = -new Date().getTimezoneOffset();
-  const sign = minutes >= 0 ? "+" : "-";
-  const abs = Math.abs(minutes);
-  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
-  const mm = String(abs % 60).padStart(2, "0");
-  return `${sign}${hh}:${mm}`;
+/** MySQL NOW() and DATE() follow Africa/Lagos (WAT, no DST). */
+function sessionTimeZone() {
+  return "+01:00";
 }
 
 function isLoopback(host: string) {
@@ -111,7 +107,7 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
 
     try {
       // Avoid mysql2 prepared-statement protocol; Hyperdrive MySQL rejects COM_STMT_PREPARE.
-      await db.query(`SET time_zone = '${tzOffset()}'`);
+      await db.query(`SET time_zone = '${sessionTimeZone()}'`);
       return await fn(db);
     } finally {
       await db.end();

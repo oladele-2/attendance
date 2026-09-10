@@ -14,9 +14,12 @@ import {
   insertUser,
   uniqueFriendlySlug,
   updateAttendanceDash,
+  updateCheckOut,
+  updatePrivilegeStatus,
 } from "@/lib/queries";
 import { companyAllowsLogin, hashPhpPassword, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
 import { getSession, setSession } from "@/lib/session";
+import { normalizePhotoFilename } from "@/lib/brand";
 
 function fail(path: string, code: string): never {
   redirect(`${path}?error=${encodeURIComponent(code)}`);
@@ -184,6 +187,31 @@ export async function deleteAttendanceAction(formData: FormData) {
   redirect("/dashboard?notice=deleted");
 }
 
+export async function closeForgottenShift(formData: FormData) {
+  const session = await getSession();
+  if (!session?.company_id || !session.user_id) fail("/passcode", "session");
+  if (session.privilege !== "CEO" && session.privilege !== "Admin") fail("/", "admin-only");
+  const id = Number(formData.get("id"));
+  const hours = String(formData.get("hours") ?? "12");
+  if (!id) fail("/duty", "not-found");
+
+  try {
+    await withDb(async (db) => {
+      const record = await getAttendanceById(db, id);
+      if (!record || record.hospital_id !== session.company_id || record.check_out_time) {
+        throw new Error("not-found");
+      }
+      await updateCheckOut(db, 1, id);
+      const privilege = await getPrivilegeAtCompany(db, record.user_id, session.company_id);
+      if (privilege) await updatePrivilegeStatus(db, "DISAPPROVED", privilege.id);
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "not-found") fail("/duty", "not-found");
+    fail("/duty", "db");
+  }
+  redirect(`/duty?hours=${encodeURIComponent(hours)}&notice=shift-closed`);
+}
+
 const ELEVATED_ROLES = new Set(["ceo", "admin"]);
 
 function digitsOnly(value: string) {
@@ -224,6 +252,7 @@ export async function createStaff(formData: FormData) {
     fail("/staff/new", "role-forbidden");
   }
 
+  const img = normalizePhotoFilename(String(formData.get("img") ?? ""));
   const dob = /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) ? dobRaw : "1990-01-01";
 
   let result;
@@ -272,6 +301,7 @@ export async function createStaff(formData: FormData) {
           phone,
           dob,
           home,
+          img,
         });
         await insertPrivilege(db, {
           userId,
