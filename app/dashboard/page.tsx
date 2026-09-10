@@ -3,10 +3,8 @@ import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import {
   facilityStaffOptions,
-  getUserName,
   hospitalAttendance,
-  hospitalAttendanceCount,
-  hospitalAttendanceSummary,
+  hospitalAttendanceStats,
 } from "@/lib/queries";
 import { actionDate, formatLongDate, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
 import { isoDate } from "@/lib/dates";
@@ -34,18 +32,20 @@ export default async function DashboardPage({
 
   let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
   let total = 0;
-  let summary: Awaited<ReturnType<typeof hospitalAttendanceSummary>> = null;
-  let staffName: Awaited<ReturnType<typeof getUserName>> = null;
+  let summary: Awaited<ReturnType<typeof hospitalAttendanceStats>> | null = null;
+  let staffName: { first: string | null; last: string | null } | null = null;
   let staffOptions: Awaited<ReturnType<typeof facilityStaffOptions>> = [];
   let loadError = params.error;
   try {
     const result = await withDb(async (db) => {
-      const total = await hospitalAttendanceCount(db, session.company_id, staff, date, month);
+      const stats = await hospitalAttendanceStats(db, session.company_id, staff, date, month);
       const rows = await hospitalAttendance(db, session.company_id, offset, limit, staff, date, month);
-      const summary = await hospitalAttendanceSummary(db, session.company_id, staff, date, month);
-      const staffName = staff ? await getUserName(db, staff) : null;
       const staffOptions = admin ? await facilityStaffOptions(db, session.company_id) : [];
-      return { rows, total, summary, staffName, staffOptions };
+      const selected = staff ? staffOptions.find((option) => Number(option.user_id) === staff) : null;
+      const staffName = staff
+        ? selected ?? (staff === session.user_id ? { first: session.first ?? null, last: session.last ?? null } : null)
+        : null;
+      return { rows, total: stats.total, summary: stats, staffName, staffOptions };
     });
     rows = result.rows;
     total = result.total;

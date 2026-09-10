@@ -70,6 +70,25 @@ In the dashboard: Hyperdrive → this config → Caching → Off. Attendance `SE
 
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
+### Free-tier performance setup
+
+Run the idempotent indexes once on the Cloudways database before deploying:
+
+```bash
+mysql -h PUBLIC_HOST -u USER -p DATABASE < database/performance-indexes.sql
+```
+
+Keep Hyperdrive's origin pool conservative for this workload. Five connections is
+enough for roughly 100 daily staff and leaves headroom on the Cloudways database:
+
+```bash
+npx wrangler hyperdrive update 25941e25a10f4290b01888a241f26147 --origin-connection-limit=5
+```
+
+The Worker uses Smart Placement, immutable hashed static assets, 10% log sampling,
+and no automatic link prefetching. Attendance reads remain fresh; do not enable
+page caching for authenticated HTML.
+
 ### Secrets (Build variables vs Worker secrets)
 
 Wrangler needs **`SESSION_SECRET`** and **`PASSWORD_PEPPER`** on the Worker at deploy time. They are **not** the same as plain environment variables unless you upload them during deploy.

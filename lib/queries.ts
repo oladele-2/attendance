@@ -15,6 +15,25 @@ const DAY_EXPR = (alias = "") => {
   return `DATE(${prefix}check_in_time)`;
 };
 
+function nextIsoDay(day: string) {
+  const match = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const value = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (Number.isNaN(value.getTime()) || value.toISOString().slice(0, 10) !== day) return null;
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
+function monthBounds(month: string) {
+  const match = month.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  const next = new Date(Date.UTC(year, monthIndex + 1, 1));
+  return { start: `${month}-01`, end: next.toISOString().slice(0, 10) };
+}
+
 /** Hyperdrive caches identical SELECTs and does not invalidate them after INSERT/UPDATE. */
 const FRESH_READ = "/* NOW() */";
 
@@ -126,10 +145,10 @@ export async function getLatestCompletedToday(
     `${FRESH_READ}
      SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM \`attendance\`
-     WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=? AND check_out_time IS NOT NULL
+     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<? AND check_out_time IS NOT NULL
      ORDER BY check_out_time DESC
      LIMIT 1`,
-    [userId, hospitalId, today],
+    [userId, hospitalId, `${today} 00:00:00`, `${nextIsoDay(today) ?? today} 00:00:00`],
   );
 }
 
@@ -143,8 +162,8 @@ export async function countShiftsToday(
     db,
     `${FRESH_READ}
      SELECT COUNT(*) AS total FROM \`attendance\`
-     WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=?`,
-    [userId, hospitalId, today],
+     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<?`,
+    [userId, hospitalId, `${today} 00:00:00`, `${nextIsoDay(today) ?? today} 00:00:00`],
   );
   return Number(row?.total ?? 0);
 }
@@ -369,7 +388,6 @@ function attendanceFilter(
   alias = "",
 ) {
   const col = alias ? `${alias}.` : "";
-  const day = DAY_EXPR(alias);
   let sql = ` WHERE ${col}hospital_id=?`;
   const params: unknown[] = [company];
   if (staff) {
@@ -377,12 +395,15 @@ function attendanceFilter(
     params.push(staff);
   }
   if (month) {
-    const [year, mon] = month.split("-");
-    sql += ` AND YEAR(${day})=? AND MONTH(${day})=?`;
-    params.push(Number(year), Number(mon));
+    const bounds = monthBounds(month);
+    if (!bounds) return { sql: `${sql} AND 1=0`, params };
+    sql += ` AND ${col}check_in_time>=? AND ${col}check_in_time<?`;
+    params.push(`${bounds.start} 00:00:00`, `${bounds.end} 00:00:00`);
   } else if (date) {
-    sql += ` AND ${day}=?`;
-    params.push(date);
+    const next = nextIsoDay(date);
+    if (!next) return { sql: `${sql} AND 1=0`, params };
+    sql += ` AND ${col}check_in_time>=? AND ${col}check_in_time<?`;
+    params.push(`${date} 00:00:00`, `${next} 00:00:00`);
   }
   return { sql, params };
 }
@@ -457,9 +478,36 @@ export async function hospitalAttendanceSummary(
   );
 }
 
+/** Count and summary in one scan/query for report pages. */
+export async function hospitalAttendanceStats(
+  db: Connection,
+  company: number,
+  staff?: number | null,
+  date?: string | null,
+  month?: string | null,
+) {
+  const filter = attendanceFilter(company, staff, date, month);
+  const row = await queryOne<SummaryRow & CountRow>(
+    db,
+    `${FRESH_READ} SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS total_present,
+       SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
+       SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes
+     FROM attendance${filter.sql}`,
+    filter.params,
+  );
+  return {
+    total: Number(row?.total ?? 0),
+    total_present: Number(row?.total_present ?? 0),
+    total_absent: Number(row?.total_absent ?? 0),
+    total_minutes: Number(row?.total_minutes ?? 0),
+  };
+}
+
 export async function insertCheckIn(db: Connection, userId: number, hospitalId: number) {
   const [result] = await db.query<ResultSetHeader>(
-    "INSERT INTO attendance (user_id, check_in_time, hospital_id, status) VALUES (?, NOW(), ?, 0)",
+    "INSERT INTO attendance (user_id, check_in_time, hospital_id, status) VALUES (?, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00'), ?, 0)",
     [userId, hospitalId],
   );
   if (!result.insertId) {
@@ -470,7 +518,7 @@ export async function insertCheckIn(db: Connection, userId: number, hospitalId: 
 
 export async function updateCheckOut(db: Connection, status: number, id: number) {
   const [result] = await db.query<ResultSetHeader>(
-    "UPDATE attendance SET status = ?, check_out_time = NOW() WHERE id = ? AND check_out_time IS NULL",
+    "UPDATE attendance SET status = ?, check_out_time = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00') WHERE id = ? AND check_out_time IS NULL",
     [status, id],
   );
   if (!result.affectedRows) {
@@ -494,11 +542,12 @@ export async function listOpenShifts(db: Connection, hospitalId: number) {
     db,
     `${FRESH_READ}
      SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img,
-        TIMESTAMPDIFF(MINUTE, a.check_in_time, NOW()) AS minutes_open
+        TIMESTAMPDIFF(MINUTE, a.check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
      FROM attendance a
      LEFT JOIN user u ON u.user_id = a.user_id
      WHERE a.hospital_id=? AND a.check_out_time IS NULL AND a.check_in_time IS NOT NULL
-       AND a.check_in_time >= CURDATE() AND a.check_in_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+       AND a.check_in_time >= DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00'))
+       AND a.check_in_time < DATE_ADD(DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')), INTERVAL 1 DAY)
      ORDER BY a.check_in_time ASC
      LIMIT 200`,
     [hospitalId],
@@ -549,7 +598,7 @@ export async function updateFaceVector(db: Connection, faceVector: string, userI
 }
 
 export async function updatePrivilegeStatus(db: Connection, status: string, id: number) {
-  const [result] = await db.query<ResultSetHeader>("UPDATE `privilege` SET `status`=?, `at`=now() WHERE `id`=?", [
+  const [result] = await db.query<ResultSetHeader>("UPDATE `privilege` SET `status`=?, `at`=CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00') WHERE `id`=?", [
     status,
     id,
   ]);

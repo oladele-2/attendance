@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
-import { hospitalAttendance, hospitalAttendanceCount, hospitalAttendanceSummary } from "@/lib/queries";
+import { hospitalAttendance, hospitalAttendanceStats } from "@/lib/queries";
 import { actionDate, currentMonthIso, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
 import { attendanceExportPath } from "@/lib/report-csv";
 import { IconCalendar, IconCheck, IconClock, IconDownload, IconXCircle } from "@/components/icons";
@@ -11,14 +11,13 @@ export default async function MyHoursPage() {
   const staff = session.user_id!;
   let rows: Awaited<ReturnType<typeof hospitalAttendance>> = [];
   let total = 0;
-  let summary: Awaited<ReturnType<typeof hospitalAttendanceSummary>> = null;
+  let summary: Awaited<ReturnType<typeof hospitalAttendanceStats>> | null = null;
 
   try {
     const result = await withDb(async (db) => {
-      const total = await hospitalAttendanceCount(db, session.company_id, staff, undefined, month);
+      const stats = await hospitalAttendanceStats(db, session.company_id, staff, undefined, month);
       const rows = await hospitalAttendance(db, session.company_id, 0, 40, staff, undefined, month);
-      const summary = await hospitalAttendanceSummary(db, session.company_id, staff, undefined, month);
-      return { rows, total, summary };
+      return { rows, total: stats.total, summary: stats };
     });
     rows = result.rows;
     total = result.total;

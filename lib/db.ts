@@ -36,11 +36,6 @@ function secretsPresent() {
   };
 }
 
-/** MySQL NOW() and DATE() follow Africa/Lagos (WAT, no DST). */
-function sessionTimeZone() {
-  return "+01:00";
-}
-
 function isLoopback(host: string) {
   return host === "localhost" || host === "127.0.0.1";
 }
@@ -103,11 +98,13 @@ export async function withDb<T>(fn: (db: Connection) => Promise<T>): Promise<T> 
       database: cfg.database,
       port: cfg.port,
       disableEval: true,
+      // Keep MySQL DATETIME values as their stored Lagos wall-clock strings.
+      // This avoids Date parsing work and removes the need for a SET time_zone
+      // round trip on every Hyperdrive connection.
+      dateStrings: true,
     });
 
     try {
-      // Avoid mysql2 prepared-statement protocol; Hyperdrive MySQL rejects COM_STMT_PREPARE.
-      await db.query(`SET time_zone = '${sessionTimeZone()}'`);
       return await fn(db);
     } finally {
       await db.end();
@@ -149,6 +146,7 @@ export async function probeDb() {
       database: cfg.database,
       port: cfg.port,
       disableEval: true,
+      dateStrings: true,
     });
     try {
       await db.query("SELECT 1 AS ok");
