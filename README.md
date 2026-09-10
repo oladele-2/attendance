@@ -58,7 +58,15 @@ Do **not** put the Vinext npm version in Worker settings. Vinext is installed fr
 
 Optional in **Settings → Build → Build variables**: `NODE_VERSION=22` (the repo already has `.node-version` with `22`).
 
-Do not enable Worker **Cache** in the dashboard. This app is cookie-session HTML; caching the passcode page is what sent signed-in staff back to `/passcode`. Hyperdrive caching only affects SQL, not page routing.
+Do not enable Worker **Cache** in the dashboard. This app is cookie-session HTML; caching the passcode page is what sent signed-in staff back to `/passcode`.
+
+**Turn Hyperdrive query caching off** for this config. Hyperdrive does not invalidate cached `SELECT`s after check-in `INSERT` or check-out `UPDATE`, so Mark Attendance can still show “Check-in” after the row exists (or “Check-out” after checkout). Connection pooling still works with caching disabled:
+
+```bash
+npx wrangler hyperdrive update 25941e25a10f4290b01888a241f26147 --caching-disabled
+```
+
+In the dashboard: Hyperdrive → this config → Caching → Off. Attendance `SELECT`s in the app also include a `NOW()` comment so they are treated as uncacheable if caching is left on.
 
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 

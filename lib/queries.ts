@@ -15,6 +15,9 @@ const DAY_EXPR = (alias = "") => {
   return `DATE(${prefix}check_in_time)`;
 };
 
+/** Hyperdrive caches identical SELECTs and does not invalidate them after INSERT/UPDATE. */
+const FRESH_READ = "/* NOW() */";
+
 export async function getCompanyById(db: Connection, id: number) {
   return queryOne<RowDataPacket & CompanyRow>(db, "SELECT * FROM `company` WHERE `id`=?", [id]);
 }
@@ -70,7 +73,8 @@ export async function getPrivilegeAtCompany(db: Connection, userId: number, comp
 export async function getOpenAttendance(db: Connection, userId: number, hospitalId: number) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+    `${FRESH_READ}
+     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND check_in_time IS NOT NULL AND check_out_time IS NULL
      ORDER BY check_in_time DESC
@@ -88,7 +92,8 @@ export async function getLatestCompletedToday(
 ) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+    `${FRESH_READ}
+     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=? AND check_out_time IS NOT NULL
      ORDER BY check_out_time DESC
@@ -105,7 +110,8 @@ export async function countShiftsToday(
 ) {
   const row = await queryOne<CountRow>(
     db,
-    `SELECT COUNT(id) AS total FROM \`attendance\`
+    `${FRESH_READ}
+     SELECT COUNT(id) AS total FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND ${DAY_EXPR()}=?`,
     [userId, hospitalId, today],
   );
@@ -115,7 +121,8 @@ export async function countShiftsToday(
 export async function getAttendanceById(db: Connection, id: number) {
   return queryOne<RowDataPacket & AttendanceRow>(
     db,
-    `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
+    `${FRESH_READ}
+     SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM attendance WHERE id=?`,
     [id],
   );
@@ -182,7 +189,7 @@ export async function hospitalAttendanceCount(
   const filter = attendanceFilter(company, staff, date, month);
   const row = await queryOne<CountRow>(
     db,
-    "SELECT COUNT(id) as total FROM attendance" + filter.sql,
+    `${FRESH_READ} SELECT COUNT(id) as total FROM attendance` + filter.sql,
     filter.params,
   );
   return Number(row?.total ?? 0);
@@ -203,7 +210,8 @@ export async function hospitalAttendance(
   const day = DAY_EXPR("a");
   return queryAll<RowDataPacket & AttendanceRow>(
     db,
-    `SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
+    `${FRESH_READ}
+    SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
         u.first AS first_name, u.last AS last_name,
         CASE
             WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NULL THEN 'Void'
@@ -231,7 +239,8 @@ export async function hospitalAttendanceSummary(
   const filter = attendanceFilter(company, staff, date, month);
   return queryOne<SummaryRow>(
     db,
-    `SELECT
+    `${FRESH_READ}
+      SELECT
         SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS total_present,
         SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
         SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes
