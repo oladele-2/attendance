@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isAdminRole } from "@/lib/roles";
 import { getSession } from "@/lib/session";
 
 export async function requireUser() {
@@ -16,7 +17,7 @@ export async function requireFacility() {
 
 export async function requireAdmin() {
   const session = await requireUser();
-  if (session.privilege !== "CEO" && session.privilege !== "Admin") {
+  if (!isAdminRole(session.privilege)) {
     redirect("/?error=admin-only");
   }
   return session;

@@ -115,7 +115,13 @@ export default async function StaffPage({
                     </td>
                     <td className="p-4">
                       {row.status === "Staff" ? (
-                        <span className="text-xs font-semibold text-green-700">On duty</span>
+                        <Link
+                          prefetch={false}
+                          href="/duty"
+                          className="text-xs font-semibold text-green-700 hover:underline"
+                        >
+                          On duty
+                        </Link>
                       ) : (
                         <span className="text-xs text-slate-500">Off duty</span>
                       )}

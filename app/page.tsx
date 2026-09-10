@@ -1,6 +1,8 @@
 import { requireUser } from "@/lib/guards";
+import { isAdminRole } from "@/lib/roles";
 import { IconChart, IconClock, IconQr, IconScanFace, IconUsers } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
+import Link from "next/link";
 
 export default async function HomePage({
   searchParams,
@@ -9,7 +11,7 @@ export default async function HomePage({
 }) {
   const session = await requireUser();
   const params = await searchParams;
-  const admin = session.privilege === "CEO" || session.privilege === "Admin";
+  const admin = isAdminRole(session.privilege);
 
   const cards = [
     {
@@ -68,9 +70,10 @@ export default async function HomePage({
       <FlashBanner notice={params.notice} error={params.error} className="mx-auto mb-6 max-w-xl" />
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
-          <a
+          <Link
             key={card.href}
             href={card.href}
+            prefetch={false}
             className="group rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg hover:ring-[#ff8002]/40"
           >
             <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002] group-hover:bg-[#ff8002] group-hover:text-white">
@@ -78,7 +81,7 @@ export default async function HomePage({
             </span>
             <h2 className="mb-1 text-lg font-semibold text-slate-800">{card.title}</h2>
             <p className="text-sm text-slate-500">{card.body}</p>
-          </a>
+          </Link>
         ))}
       </div>
     </main>

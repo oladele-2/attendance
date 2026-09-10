@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { isAdminRole } from "@/lib/roles";
 import {
   IconChart,
   IconClock,
@@ -26,7 +28,7 @@ type Props = {
 export function Nav({ company, personName, personHref, privilege, loggedIn }: Props) {
   const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
-  const admin = privilege === "CEO" || privilege === "Admin";
+  const admin = isAdminRole(privilege);
 
   const items = [
     { href: "/", label: "Home", icon: IconHome, show: loggedIn },
@@ -34,18 +36,18 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
     { href: "/signin", label: "Sign in", icon: IconLogIn, show: !loggedIn },
     { href: "/dashboard", label: "Performance", icon: IconChart, show: loggedIn },
     { href: "/hours", label: "My hours", icon: IconClock, show: loggedIn },
+    { href: "/duty", label: "On duty", icon: IconClock, show: admin },
     { href: "/staff", label: "Staff", icon: IconUsers, show: admin },
-    { href: "/duty", label: "On duty", icon: IconUsers, show: admin },
     { href: "/verification", label: "Mark", icon: IconScanFace, show: loggedIn },
     { href: "/qrcodes", label: "Codes", icon: IconQr, show: admin },
     { href: "/logout", label: "Logout", icon: IconLogOut, show: loggedIn },
   ].filter((item) => item.show);
 
   const isActive = (href: string) =>
-    pathname === href || (href !== "/" && pathname.startsWith(href));
+    pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
   const linkClass = (href: string) =>
-    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+    `flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
       isActive(href)
         ? "bg-white text-[#a40606] hover:bg-white hover:text-[#a40606]"
         : "bg-transparent text-white hover:bg-white/15 hover:text-white"
@@ -53,16 +55,16 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
 
   return (
     <nav className="sticky top-0 z-50 bg-gradient-to-r from-[#a40606] via-[#d98324] to-[#ff8002] text-white shadow-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <div className="min-w-0">
-          <a href="/" className="block truncate text-lg font-bold tracking-tight">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 shrink">
+          <Link href="/" prefetch={false} className="block truncate text-lg font-bold tracking-tight">
             {company || "AjirMed"}
-          </a>
+          </Link>
           {personName ? (
             personHref ? (
-              <a href={personHref} className="truncate text-xs text-white/90 hover:underline">
+              <Link href={personHref} prefetch={false} className="truncate text-xs text-white/90 hover:underline">
                 {personName}
-              </a>
+              </Link>
             ) : (
               <span className="truncate text-xs text-white/90">{personName}</span>
             )
@@ -70,7 +72,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
         </div>
         <button
           type="button"
-          className="rounded-lg p-2 hover:bg-white/15 md:hidden"
+          className="rounded-lg p-2 hover:bg-white/15 lg:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Close menu" : "Open menu"}
         >
@@ -79,11 +81,12 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
         <ul
           className={`${
             open ? "flex" : "hidden"
-          } absolute right-4 top-16 z-50 w-52 flex-col gap-1 rounded-xl bg-[#a40606] p-3 shadow-xl md:static md:flex md:w-auto md:flex-row md:items-center md:gap-1 md:bg-transparent md:p-0 md:shadow-none`}
+          } absolute right-4 top-16 z-50 w-56 flex-col gap-1 rounded-xl bg-[#a40606] p-3 shadow-xl lg:static lg:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end lg:gap-1 lg:bg-transparent lg:p-0 lg:shadow-none`}
         >
           {items.map((item) => (
             <li key={item.href}>
-              <a
+              <Link
+                prefetch={false}
                 className={linkClass(item.href)}
                 href={item.href}
                 aria-current={isActive(item.href) ? "page" : undefined}
@@ -92,7 +95,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
               >
                 <item.icon size={16} />
                 {item.label}
-              </a>
+              </Link>
             </li>
           ))}
         </ul>

@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
+import { isAdminRole } from "./roles";
 import type { SessionPayload } from "./types";
 
 export const COOKIE = "attendance_session";
@@ -156,5 +157,5 @@ export async function userCookieHeader(payload: SessionPayload) {
 }
 
 export function isAdmin(session: SessionPayload | null) {
-  return session?.privilege === "CEO" || session?.privilege === "Admin";
+  return isAdminRole(session?.privilege);
 }
