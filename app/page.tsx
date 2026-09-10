@@ -23,7 +23,7 @@ export default async function HomePage({
           {
             href: "/staff",
             title: "Staff",
-            body: "Browse staff members",
+            body: "Add staff and register faces",
             icon: IconUsers,
           },
         ]

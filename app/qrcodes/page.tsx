@@ -3,7 +3,7 @@ import { PrintIdsButton } from "@/components/PrintIdsButton";
 import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { formatAddress } from "@/lib/brand";
-import { getCompanyById, getUserById, getUserPrivileges, staffPrivilegeCount, staffPrivilegePage } from "@/lib/queries";
+import { companyStaffCount, companyStaffPage, getCompanyById, getUserById } from "@/lib/queries";
 import Link from "next/link";
 
 export default async function QrCodesPage({
@@ -19,17 +19,16 @@ export default async function QrCodesPage({
 
   const { cards, total, company } = await withDb(async (db) => {
     const company = await getCompanyById(db, session.company_id);
-    const total = await staffPrivilegeCount(db, "Staff", session.company_id);
-    const ids = await staffPrivilegePage(db, "Staff", session.company_id, offset, limit);
+    const total = await companyStaffCount(db, session.company_id);
+    const ids = await companyStaffPage(db, session.company_id, offset, limit);
     const cards = [];
     for (const row of ids) {
       const user = await getUserById(db, row.user_id);
-      const privilege = await getUserPrivileges(db, row.user_id, "Staff", "DISAPPROVED", session.company_id);
       if (!user) continue;
       cards.push({
         user_id: user.user_id,
         name: `${user.first} ${user.last}`.trim(),
-        role: privilege?.privilege ?? "Staff",
+        role: row.privilege || "Staff",
         gender: user.gender,
         phone: user.pre && user.phone ? `+${user.pre}${user.phone}` : null,
         staffId: String(user.user_id),

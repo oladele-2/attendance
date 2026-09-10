@@ -152,6 +152,104 @@ export async function staffPrivilegePage(
   );
 }
 
+export async function companyStaffCount(db: Connection, company: number) {
+  const row = await queryOne<CountRow>(
+    db,
+    `${FRESH_READ} SELECT COUNT(*) AS total FROM \`privilege\` WHERE \`company\`=?`,
+    [company],
+  );
+  return Number(row?.total ?? 0);
+}
+
+export async function companyStaffPage(db: Connection, company: number, offset: number, limit: number) {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = Math.max(1, Number(limit) || 10);
+  return queryAll<RowDataPacket & { user_id: number; privilege: string; status: string }>(
+    db,
+    `${FRESH_READ} SELECT CAST(TRIM(\`user_id\`) AS UNSIGNED) AS user_id, \`privilege\`, \`status\` FROM \`privilege\`
+     WHERE \`company\`=? ORDER BY \`id\` DESC LIMIT ${safeOffset},${safeLimit}`,
+    [company],
+  );
+}
+
+export async function uniqueFriendlySlug(db: Connection, first: string, last: string) {
+  const base =
+    `${first}-${last}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "staff";
+  const reserved = new Set(["new", "add"]);
+  let slug = reserved.has(base) ? `${base}-member` : base;
+  for (let i = 0; i < 50; i += 1) {
+    const candidate = i === 0 ? slug : `${base}-${i + 1}`;
+    const existing = await getUserByFriendly(db, candidate);
+    if (!existing) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+export async function insertUser(
+  db: Connection,
+  input: {
+    first: string;
+    last: string;
+    email: string;
+    pass: string;
+    friendly: string;
+    gender: string;
+    pre: string;
+    phone: string;
+    dob: string;
+    home: string;
+  },
+) {
+  const [result] = await db.query<ResultSetHeader>(
+    `INSERT INTO \`user\` (
+      \`first\`, \`last\`, \`identity\`, \`friendly\`, \`email\`, \`pre\`, \`phone\`, \`pass\`,
+      \`img\`, \`gender\`, \`dob\`, \`home\`, \`town\`, \`country\`, \`date_city\`, \`status\`, \`at\`
+    ) VALUES (?, ?, '', ?, ?, ?, ?, ?, 'patient.png', ?, ?, ?, '', 'Nigeria', 'Africa/Lagos', 'APPROVED', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))`,
+    [
+      input.first,
+      input.last,
+      input.friendly,
+      input.email,
+      input.pre,
+      input.phone,
+      input.pass,
+      input.gender,
+      input.dob,
+      input.home,
+    ],
+  );
+  if (!result.insertId) {
+    throw new Error("Staff account was not saved.");
+  }
+  return Number(result.insertId);
+}
+
+export async function insertPrivilege(
+  db: Connection,
+  input: {
+    userId: number;
+    company: number;
+    privilege: string;
+    issuerId: number;
+    note: string;
+  },
+) {
+  const [result] = await db.query<ResultSetHeader>(
+    `INSERT INTO \`privilege\` (
+      \`user_id\`, \`privilege\`, \`status\`, \`issuer_id\`, \`at\`, \`company\`, \`note\`, \`last_seen\`
+    ) VALUES (?, ?, 'DISAPPROVED', ?, DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'), ?, ?, '')`,
+    [String(input.userId), input.privilege, String(input.issuerId), String(input.company), input.note],
+  );
+  if (!result.insertId) {
+    throw new Error("Staff access at this facility was not saved.");
+  }
+  return Number(result.insertId);
+}
+
 function attendanceFilter(
   company: number,
   staff?: number | null,

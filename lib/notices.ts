@@ -4,6 +4,8 @@ export const NOTICE_COPY: Record<string, string> = {
   "checked-in": "You are checked in.",
   "checked-out": "You are checked out.",
   "face-saved": "Face template saved.",
+  "staff-added": "Staff account created. Register a face if they will use face check-in.",
+  "staff-linked": "This person already has an AjirMed account. They can now sign in at this facility.",
 };
 
 export const ERROR_COPY: Record<string, string> = {
@@ -19,6 +21,12 @@ export const ERROR_COPY: Record<string, string> = {
   "session": "Your session expired. Please sign in again.",
   "db": "We could not reach the database. Try again in a moment.",
   "no-permission": "You do not have permission to do that.",
+  "staff-exists": "That person already has access at this facility.",
+  "email-taken": "That email already belongs to someone else. Use a different email, or leave password blank only when linking an existing account.",
+  "phone-taken": "That phone number already belongs to a different account.",
+  "weak-password": "Password must be at least 8 characters and match the confirmation.",
+  "missing-staff": "First name, last name, email, phone, and gender are required.",
+  "role-forbidden": "Only the CEO can assign Admin or CEO access.",
 };
 
 export function noticeMessage(code?: string) {

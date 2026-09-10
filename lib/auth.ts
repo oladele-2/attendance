@@ -3,18 +3,26 @@ import { env } from "cloudflare:workers";
 import type { CompanyRow, UserRow } from "./types";
 import { COMPANY_OK_STATUSES } from "./types";
 
-export function verifyPhpPassword(plain: string, lastName: string, hash: string) {
-  let pepper = "";
+function passwordPepper() {
   try {
     const fromEnv = env.PASSWORD_PEPPER;
-    if (typeof fromEnv === "string") pepper = fromEnv;
+    if (typeof fromEnv === "string") return fromEnv;
   } catch {
-    pepper = "";
+    /* cloudflare:workers unavailable */
   }
-  if (!pepper) pepper = process.env.PASSWORD_PEPPER || "";
-  const salted = `${plain}${lastName}${pepper}`;
+  return process.env.PASSWORD_PEPPER || "";
+}
+
+export function verifyPhpPassword(plain: string, lastName: string, hash: string) {
+  const salted = `${plain}${lastName}${passwordPepper()}`;
   const normalized = hash.replace(/^\$2y\$/, "$2a$");
   return bcrypt.compareSync(salted, normalized);
+}
+
+/** Same scheme as PHP: bcrypt(password + lastName + pepper), stored as $2y$. */
+export function hashPhpPassword(plain: string, lastName: string) {
+  const hash = bcrypt.hashSync(`${plain}${lastName}${passwordPepper()}`, 10);
+  return hash.replace(/^\$2a\$/, "$2y$").replace(/^\$2b\$/, "$2y$");
 }
 
 export function companyAllowsLogin(company: CompanyRow) {

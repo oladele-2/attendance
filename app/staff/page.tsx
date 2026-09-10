@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
-import { getUserById, getUserPrivileges, staffPrivilegeCount, staffPrivilegePage } from "@/lib/queries";
-import { IconCheck, IconUser, IconUsers, IconXCircle } from "@/components/icons";
+import { companyStaffCount, companyStaffPage, getUserById } from "@/lib/queries";
+import { IconCheck, IconUser, IconUserPlus, IconUsers, IconXCircle } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
 
 export default async function StaffPage({
@@ -17,13 +17,12 @@ export default async function StaffPage({
   const offset = (page - 1) * limit;
 
   const { rows, total } = await withDb(async (db) => {
-    const total = await staffPrivilegeCount(db, "Staff", session.company_id);
-    const ids = await staffPrivilegePage(db, "Staff", session.company_id, offset, limit);
+    const total = await companyStaffCount(db, session.company_id);
+    const ids = await companyStaffPage(db, session.company_id, offset, limit);
     const rows = await Promise.all(
       ids.map(async (row) => {
         const staff = await getUserById(db, row.user_id);
-        const privilege = await getUserPrivileges(db, row.user_id, "Staff", "DISAPPROVED", session.company_id);
-        return { staff, privilege };
+        return { staff, privilege: row.privilege, onDuty: row.status === "Staff" };
       }),
     );
     return { rows, total };
@@ -33,14 +32,23 @@ export default async function StaffPage({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002]">
-          <IconUsers />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{session.company} staff</h1>
-          <p className="text-sm text-slate-500">{total} currently on shift list</p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff4ea] text-[#ff8002]">
+            <IconUsers />
+          </span>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">{session.company} staff</h1>
+            <p className="text-sm text-slate-500">{total} people with access at this facility</p>
+          </div>
         </div>
+        <Link
+          href="/staff/new"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#ff8002] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#d98324]"
+        >
+          <IconUserPlus size={16} />
+          Add staff
+        </Link>
       </div>
       <FlashBanner notice={params.notice} error={params.error} />
       <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
@@ -48,27 +56,36 @@ export default async function StaffPage({
           <thead className="bg-slate-50 text-slate-600">
             <tr>
               <th className="p-4">Staff</th>
+              <th className="p-4">Role</th>
               <th className="p-4">Face</th>
-              <th className="p-4">Gender</th>
+              <th className="p-4">Shift</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="p-8 text-center text-slate-500">
-                  No staff found.
+                <td colSpan={4} className="p-8 text-center text-slate-500">
+                  No staff yet.{" "}
+                  <Link href="/staff/new" className="font-semibold text-[#ff8002] hover:underline">
+                    Add the first person
+                  </Link>
+                  .
                 </td>
               </tr>
             ) : (
-              rows.map(({ staff }) =>
+              rows.map(({ staff, privilege, onDuty }) =>
                 staff ? (
                   <tr key={staff.user_id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="p-4">
-                        <Link href={`/staff/${staff.friendly || staff.user_id}`} className="inline-flex items-center gap-2 font-medium text-[#ff8002] hover:underline">
-                          <IconUser size={16} />
-                          {staff.first} {staff.last}
-                        </Link>
+                      <Link
+                        href={`/staff/${staff.friendly || staff.user_id}`}
+                        className="inline-flex items-center gap-2 font-medium text-[#ff8002] hover:underline"
+                      >
+                        <IconUser size={16} />
+                        {staff.first} {staff.last}
+                      </Link>
                     </td>
+                    <td className="p-4 text-slate-600">{privilege || "Staff"}</td>
                     <td className="p-4">
                       {staff.face_vector ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
@@ -80,7 +97,13 @@ export default async function StaffPage({
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-slate-600">{staff.gender || "—"}</td>
+                    <td className="p-4">
+                      {onDuty ? (
+                        <span className="text-xs font-semibold text-green-700">On duty</span>
+                      ) : (
+                        <span className="text-xs text-slate-500">Off duty</span>
+                      )}
+                    </td>
                   </tr>
                 ) : null,
               )

@@ -4,14 +4,19 @@ import { withDb } from "@/lib/db";
 import { getPrivilegeAtCompany, getUserByFriendly, getUserById } from "@/lib/queries";
 import { notFound } from "next/navigation";
 import { IconScanFace, IconUser } from "@/components/icons";
+import { FlashBanner } from "@/components/FlashBanner";
+import Link from "next/link";
 
 export default async function RegisterFacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ friendly: string }>;
+  searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
   const session = await requireAdmin();
   const { friendly } = await params;
+  const query = await searchParams;
   const staff = await withDb(async (db) => {
     const user = /^\d+$/.test(friendly)
       ? await getUserById(db, Number(friendly))
@@ -35,6 +40,7 @@ export default async function RegisterFacePage({
         <h2 className="text-2xl font-bold text-slate-800">
           {staff.first} {staff.last}
         </h2>
+        <FlashBanner notice={query.notice} error={query.error} className="mx-auto mt-4 max-w-lg" />
         <p className="mt-2 mb-6 flex items-center justify-center gap-2 text-slate-600">
           <IconScanFace size={16} />
           {staff.face_vector
@@ -47,6 +53,9 @@ export default async function RegisterFacePage({
           extraBody={{ user_id: staff.user_id }}
           buttonLabel={staff.face_vector ? "Update face template" : "Save face template"}
         />
+        <Link href="/staff" className="mt-6 inline-block text-sm font-semibold text-[#ff8002] hover:underline">
+          Back to staff list
+        </Link>
       </div>
     </main>
   );

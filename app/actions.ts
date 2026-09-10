@@ -6,13 +6,17 @@ import {
   deleteAttendance,
   getAttendanceById,
   getCompanyById,
+  getPrivilegeAtCompany,
   getUserByEmail,
   getUserById,
   getUserByPhone,
   getUserPrivileges,
+  insertPrivilege,
+  insertUser,
+  uniqueFriendlySlug,
   updateAttendanceDash,
 } from "@/lib/queries";
-import { companyAllowsLogin, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
+import { companyAllowsLogin, hashPhpPassword, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
 import { getSession, setSession } from "@/lib/session";
 
 function fail(path: string, code: string): never {
@@ -179,4 +183,118 @@ export async function deleteAttendanceAction(formData: FormData) {
     fail("/dashboard", "db");
   }
   redirect("/dashboard?notice=deleted");
+}
+
+const ELEVATED_ROLES = new Set(["ceo", "admin"]);
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function normalizePhone(pre: string, local: string) {
+  const code = digitsOnly(pre) || "234";
+  let number = digitsOnly(local);
+  if (number.startsWith("0")) number = number.slice(1);
+  return { pre: code, phone: number };
+}
+
+export async function createStaff(formData: FormData) {
+  const session = await getSession();
+  if (!session?.company_id || !session.user_id) fail("/passcode", "session");
+  if (session.privilege !== "CEO" && session.privilege !== "Admin") fail("/", "admin-only");
+
+  const first = String(formData.get("first") ?? "").trim();
+  const last = String(formData.get("last") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const gender = String(formData.get("gender") ?? "").trim();
+  const roleRaw = String(formData.get("privilege") ?? "Staff").trim() || "Staff";
+  const note = String(formData.get("note") ?? "").trim().slice(0, 100);
+  const dobRaw = String(formData.get("dob") ?? "").trim();
+  const home = String(formData.get("home") ?? "").trim().slice(0, 300);
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("password_confirm") ?? "");
+  const { pre, phone } = normalizePhone(
+    String(formData.get("pre") ?? "234"),
+    String(formData.get("phone") ?? ""),
+  );
+
+  if (!first || !last || !isEmail(email) || !phone || phone.length < 7 || !gender) {
+    fail("/staff/new", "missing-staff");
+  }
+  if (ELEVATED_ROLES.has(roleRaw.toLowerCase()) && session.privilege !== "CEO") {
+    fail("/staff/new", "role-forbidden");
+  }
+
+  const dob = /^\d{4}-\d{2}-\d{2}$/.test(dobRaw) ? dobRaw : "1990-01-01";
+
+  let result;
+  try {
+    result = await withDb(async (db) => {
+      const byEmail = await getUserByEmail(db, email);
+      const byPhone = await getUserByPhone(db, `+${pre}${phone}`);
+      if (byPhone && byEmail && byPhone.user_id !== byEmail.user_id) {
+        return { error: "phone-taken" as const };
+      }
+      if (byPhone && !byEmail) {
+        return { error: "phone-taken" as const };
+      }
+
+      if (byEmail) {
+        const existing = await getPrivilegeAtCompany(db, byEmail.user_id, session.company_id);
+        if (existing) return { error: "staff-exists" as const };
+        await insertPrivilege(db, {
+          userId: byEmail.user_id,
+          company: session.company_id,
+          privilege: roleRaw,
+          issuerId: session.user_id!,
+          note,
+        });
+        return {
+          notice: "staff-linked" as const,
+          friendly: byEmail.friendly || String(byEmail.user_id),
+        };
+      }
+
+      if (password.length < 8 || password !== confirm) {
+        return { error: "weak-password" as const };
+      }
+
+      await db.beginTransaction();
+      try {
+        const friendly = await uniqueFriendlySlug(db, first, last);
+        const userId = await insertUser(db, {
+          first,
+          last,
+          email,
+          pass: hashPhpPassword(password, last),
+          friendly,
+          gender,
+          pre,
+          phone,
+          dob,
+          home,
+        });
+        await insertPrivilege(db, {
+          userId,
+          company: session.company_id,
+          privilege: roleRaw,
+          issuerId: session.user_id!,
+          note,
+        });
+        await db.commit();
+        return { notice: "staff-added" as const, friendly };
+      } catch (error) {
+        await db.rollback();
+        throw error;
+      }
+    });
+  } catch {
+    fail("/staff/new", "db");
+  }
+
+  if ("error" in result && result.error) fail("/staff/new", result.error);
+  if ("friendly" in result && result.friendly) {
+    redirect(`/staff/${result.friendly}?notice=${result.notice}`);
+  }
+  fail("/staff/new", "db");
 }

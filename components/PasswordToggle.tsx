@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { IconEye, IconEyeOff, IconLock } from "./icons";
 
-export function PasswordToggle() {
+export function PasswordToggle({
+  id = "password",
+  name = "member_password",
+  placeholder = "Enter your password",
+  autoComplete = "current-password",
+  required = true,
+}: {
+  id?: string;
+  name?: string;
+  placeholder?: string;
+  autoComplete?: string;
+  required?: boolean;
+}) {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -11,12 +23,12 @@ export function PasswordToggle() {
         <IconLock size={18} />
       </span>
       <input
-        id="password"
-        name="member_password"
+        id={id}
+        name={name}
         type={show ? "text" : "password"}
-        placeholder="Enter your password"
-        required
-        autoComplete="current-password"
+        placeholder={placeholder}
+        required={required}
+        autoComplete={autoComplete}
         className="w-full rounded-xl border border-slate-300 py-3 pr-12 pl-10 outline-none focus:border-[#ff8002] focus:ring-2 focus:ring-[#ff8002]/20"
       />
       <button
