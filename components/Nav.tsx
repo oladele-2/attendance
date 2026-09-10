@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
@@ -53,14 +52,14 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
     <nav className="sticky top-0 z-50 bg-gradient-to-r from-[#a40606] via-[#d98324] to-[#ff8002] text-white shadow-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="min-w-0">
-          <Link href="/" className="block truncate text-lg font-bold tracking-tight">
+          <a href="/" className="block truncate text-lg font-bold tracking-tight">
             {company || "AjirMed"}
-          </Link>
+          </a>
           {personName ? (
             personHref ? (
-              <Link href={personHref} className="truncate text-xs text-white/90 hover:underline">
+              <a href={personHref} className="truncate text-xs text-white/90 hover:underline">
                 {personName}
-              </Link>
+              </a>
             ) : (
               <span className="truncate text-xs text-white/90">{personName}</span>
             )
@@ -81,7 +80,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
         >
           {items.map((item) => (
             <li key={item.href}>
-              <Link
+              <a
                 className={linkClass(item.href)}
                 href={item.href}
                 aria-current={isActive(item.href) ? "page" : undefined}
@@ -90,7 +89,7 @@ export function Nav({ company, personName, personHref, privilege, loggedIn }: Pr
               >
                 <item.icon size={16} />
                 {item.label}
-              </Link>
+              </a>
             </li>
           ))}
         </ul>

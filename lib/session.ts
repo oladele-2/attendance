@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { SessionPayload } from "./types";
 
 export const COOKIE = "attendance_session";
@@ -24,6 +24,12 @@ function sessionSecret() {
   return new TextEncoder().encode(secret);
 }
 
+function tokenFromCookieHeader(header: string | null | undefined) {
+  if (!header) return null;
+  const match = header.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export async function encryptSession(payload: SessionPayload) {
   return new SignJWT(payload as JWTPayload)
     .setProtectedHeader({ alg: "HS256" })
@@ -43,8 +49,22 @@ export async function decryptSession(token: string | undefined | null): Promise<
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
-  const jar = await cookies();
-  return decryptSession(jar.get(COOKIE)?.value);
+  let token: string | null = null;
+  try {
+    const headerList = await headers();
+    token = tokenFromCookieHeader(headerList.get("cookie"));
+  } catch {
+    token = null;
+  }
+  if (!token) {
+    try {
+      const jar = await cookies();
+      token = jar.get(COOKIE)?.value ?? null;
+    } catch {
+      token = null;
+    }
+  }
+  return decryptSession(token);
 }
 
 export async function setSession(payload: SessionPayload) {

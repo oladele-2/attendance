@@ -54,7 +54,11 @@ In the Worker → **Settings** → **Build**:
 
 Recommended: empty build command, deploy command **`npm run deploy`**. That runs Vinext’s build, then Wrangler with `dist/server/wrangler.json`.
 
-Pin **Node.js 22** in Workers Builds (Environment variables / Build → Node.js version). This app’s `engines.node` and `.node-version` are `>=22` / `22`. Vinext is pinned in `package.json` as `vinext@1.0.0-beta.9` and `@vinext/cloudflare@1.0.0-beta.7` so Cloudflare does not pick a different beta.
+Do **not** put the Vinext npm version in Worker settings. Vinext is installed from `package.json` during `npm install`.
+
+Optional in **Settings → Build → Build variables**: `NODE_VERSION=22` (the repo already has `.node-version` with `22`).
+
+Do not enable Worker **Cache** in the dashboard. This app is cookie-session HTML; caching the passcode page is what sent signed-in staff back to `/passcode`. Hyperdrive caching only affects SQL, not page routing.
 
 The Worker name in `wrangler.jsonc` is **`attendance`**, matching the GitHub-connected Worker.
 
