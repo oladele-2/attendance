@@ -25,7 +25,7 @@ export default async function HomePage({
           {
             href: "/onduty",
             title: "On duty",
-            body: "Who is checked in, forgotten check-out",
+            body: "See who is currently checked in",
             icon: IconClock,
           },
           {

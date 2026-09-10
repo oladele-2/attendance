@@ -2,7 +2,6 @@ import { requireAdmin } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { listOpenShifts } from "@/lib/queries";
 import { formatLongDate, isoDate, minutesToHm, mysqlLagosStamp } from "@/lib/dates";
-import { closeForgottenShift } from "@/app/duty-actions";
 import { FlashBanner } from "@/components/FlashBanner";
 import { StaffAvatar } from "@/components/StaffAvatar";
 import { IconClock, IconUsers } from "@/components/icons";
@@ -63,7 +62,7 @@ export default async function OnDutyPage({
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <IconClock size={16} /> Forgotten check-out today ({forgotten.length})
+            <IconClock size={16} /> Long open shifts today ({forgotten.length})
           </h2>
           <form method="get" className="flex items-center gap-2 text-sm">
             <label htmlFor="hours">Older than</label>
@@ -98,16 +97,9 @@ export default async function OnDutyPage({
                     Open since {mysqlLagosStamp(row.check_in_time)} ({minutesToHm(Number(row.minutes_open))})
                   </p>
                 </div>
-                <form action={closeForgottenShift}>
-                  <input type="hidden" name="id" value={row.id} />
-                  <input type="hidden" name="hours" value={hours} />
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-[#fff4ea] px-3 py-1.5 text-xs font-semibold text-[#d98324] hover:bg-[#ff8002] hover:text-white"
-                  >
-                    Check out now
-                  </button>
-                </form>
+                <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+                  Must check out from their own account
+                </span>
               </li>
             ))}
           </ul>
