@@ -488,21 +488,19 @@ export async function listOpenShifts(db: Connection, hospitalId: number) {
       first: string | null;
       last: string | null;
       img: string | null;
-      pre: string | null;
-      phone: string | null;
-      privilege: string | null;
       minutes_open: number;
     }
   >(
     db,
     `${FRESH_READ}
-     SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img, u.pre, u.phone,
-        p.privilege, TIMESTAMPDIFF(MINUTE, a.check_in_time, NOW()) AS minutes_open
+     SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img,
+        TIMESTAMPDIFF(MINUTE, a.check_in_time, NOW()) AS minutes_open
      FROM attendance a
      LEFT JOIN user u ON u.user_id = a.user_id
-     LEFT JOIN privilege p ON CAST(TRIM(p.user_id) AS UNSIGNED) = a.user_id AND p.company = a.hospital_id
-     WHERE a.hospital_id=? AND a.check_in_time IS NOT NULL AND a.check_out_time IS NULL
-     ORDER BY a.check_in_time ASC`,
+     WHERE a.hospital_id=? AND a.check_out_time IS NULL AND a.check_in_time IS NOT NULL
+       AND a.check_in_time >= CURDATE() AND a.check_in_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+     ORDER BY a.check_in_time ASC
+     LIMIT 200`,
     [hospitalId],
   );
 }

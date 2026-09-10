@@ -20,16 +20,18 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+const lagosFmt = new Intl.DateTimeFormat("en-GB", {
+  timeZone: APP_TZ,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 function lagosParts(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: APP_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
+  const parts = lagosFmt.formatToParts(date);
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
   return {
     year: get("year"),
@@ -128,6 +130,17 @@ export function formatMonthTitle(month: string) {
 export function minutesToHm(total: number | null | undefined) {
   const mins = Number(total ?? 0);
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+/** Format a MySQL DATETIME already stored as Africa/Lagos, without Intl. */
+export function mysqlLagosStamp(value: unknown) {
+  const match = String(value ?? "").match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2})/);
+  if (!match) return "";
+  let hour = Number(match[2]);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+  return `${match[1]} ${hour}:${match[3]} ${ampm}`;
 }
 
 export function isoDateValue(value: string | Date | null | undefined) {

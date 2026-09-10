@@ -23,7 +23,7 @@ export default async function HomePage({
     ...(admin
       ? [
           {
-            href: "/duty",
+            href: "/onduty",
             title: "On duty",
             body: "Who is checked in, forgotten check-out",
             icon: IconClock,

@@ -4,7 +4,7 @@ import { withDb } from "@/lib/db";
 import { companyStaffCount, companyStaffPage } from "@/lib/queries";
 import { IconCheck, IconUserPlus, IconUsers, IconXCircle } from "@/components/icons";
 import { FlashBanner } from "@/components/FlashBanner";
-import { StaffAvatar } from "@/components/StaffPhoto";
+import { StaffAvatar } from "@/components/StaffAvatar";
 
 export default async function StaffPage({
   searchParams,
@@ -117,7 +117,7 @@ export default async function StaffPage({
                       {row.status === "Staff" ? (
                         <Link
                           prefetch={false}
-                          href="/duty"
+                          href="/onduty"
                           className="text-xs font-semibold text-green-700 hover:underline"
                         >
                           On duty
