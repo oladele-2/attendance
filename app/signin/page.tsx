@@ -40,7 +40,7 @@ export default async function SignInPage({
                 name="member_email"
                 required
                 placeholder="name@hospital.com or 080..."
-                autoComplete="off"
+                autoComplete="one-time-code"
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
@@ -55,7 +55,7 @@ export default async function SignInPage({
             <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-700">
               Password
             </label>
-            <PasswordToggle autoComplete="off" />
+            <PasswordToggle autoComplete="one-time-code" />
           </div>
           <PendingButton className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff8002] py-3.5 font-bold text-white hover:bg-[#d98324] disabled:bg-gray-400">
             <IconLogIn size={18} />
