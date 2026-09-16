@@ -9,16 +9,9 @@ import {
   getLatestCompletedToday,
   getOpenAttendance,
 } from "@/lib/queries";
-import { actionDate, minutesToHm, mysqlLagosStamp, parseDateTime } from "@/lib/dates";
+import { attendanceStamp, minutesToHm, mysqlLagosStamp } from "@/lib/dates";
 import { isoDate } from "@/lib/dates";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
-
-function asText(value: unknown) {
-  if (value == null) return "";
-  const parsed = parseDateTime(value);
-  if (parsed) return parsed.toISOString();
-  return String(value);
-}
 
 export default async function VerificationPage({
   searchParams,
@@ -58,8 +51,8 @@ export default async function VerificationPage({
 
     if (result.completed?.check_in_time && result.completed.check_out_time) {
       lastCompleted = {
-        check_in_time: asText(result.completed.check_in_time),
-        check_out_time: asText(result.completed.check_out_time),
+        check_in_time: String(result.completed.check_in_time),
+        check_out_time: String(result.completed.check_out_time),
       };
     }
 
@@ -81,14 +74,16 @@ export default async function VerificationPage({
     buttonLabel = "Unavailable";
   } else if (openShift) {
     const dayLabel = openShift.check_in_day === today ? "today" : "on a previous day";
-    statusMessage = `Checked in ${dayLabel} at ${actionDate(openShift.check_in_time)}. Don’t forget to check out.`;
-    if (openShift.check_in_day < today) {
+    statusMessage = `Checked in ${dayLabel} at ${attendanceStamp(openShift.check_in_time)}. Don’t forget to check out.`;
+    if (openShift.minutes_open >= 24 * 60) {
+      statusMessage += " This shift has been open for more than a day. Check the recorded check-in date before checking out.";
+    } else if (openShift.check_in_day < today) {
       statusMessage += " Night shift still open.";
     }
     statusClass = "bg-[#e6f7ff] border-[#80d4ff] text-[#006699]";
     buttonLabel = "Check-out";
   } else if (lastCompleted) {
-    statusMessage = `Last shift: in at ${actionDate(lastCompleted.check_in_time)}, out at ${actionDate(lastCompleted.check_out_time)}. You can start another shift.`;
+    statusMessage = `Last shift: in at ${attendanceStamp(lastCompleted.check_in_time)}, out at ${attendanceStamp(lastCompleted.check_out_time)}. You can start another shift.`;
     if (shiftsToday > 1) {
       statusMessage += ` (${shiftsToday} shifts today)`;
     }
@@ -117,7 +112,7 @@ export default async function VerificationPage({
             <p className="text-lg font-bold">Your previous shift is still open</p>
             <p className="mt-1 text-sm">
               You checked in {mysqlLagosStamp(openShift.check_in_time)} and have been on duty for {minutesToHm(openShift.minutes_open)}.
-              Only you can check out this shift.
+              Check the check-in date carefully before checking out. A facility CEO can correct a mistaken record.
             </p>
           </div>
         ) : null}

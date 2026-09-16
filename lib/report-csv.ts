@@ -1,4 +1,4 @@
-import { clockTimeValue, isoDateValue } from "./dates";
+import { attendanceStamp, isoDateValue } from "./dates";
 import type { AttendanceRow } from "./types";
 
 function csvCell(value: unknown) {
@@ -8,15 +8,15 @@ function csvCell(value: unknown) {
 }
 
 export function attendanceCsv(rows: AttendanceRow[]) {
-  const header = ["Staff", "Date", "Check in", "Check out", "Status", "Hours"];
+  const header = ["Staff", "Shift start date", "Check in (Africa/Lagos)", "Check out (Africa/Lagos)", "Status", "Hours"];
   const lines = [
     header.join(","),
     ...rows.map((row) =>
       [
         csvCell(`${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || row.user_id),
         csvCell(isoDateValue(row.attendance_date ?? row.check_in_time)),
-        csvCell(clockTimeValue(row.check_in_time)),
-        csvCell(row.check_out_time ? clockTimeValue(row.check_out_time) : "Not signed out"),
+        csvCell(attendanceStamp(row.check_in_time)),
+        csvCell(row.check_out_time ? attendanceStamp(row.check_out_time) : "Not signed out"),
         csvCell(row.status_text ?? ""),
         csvCell(row.hours_worked ?? ""),
       ].join(","),

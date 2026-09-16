@@ -6,7 +6,7 @@ import {
   hospitalAttendance,
   hospitalAttendanceStats,
 } from "@/lib/queries";
-import { actionDate, formatLongDate, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
+import { attendanceStamp, formatLongDate, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
 import { isoDate } from "@/lib/dates";
 import { attendanceExportPath } from "@/lib/report-csv";
 import { ConfirmDelete } from "@/components/ConfirmDelete";
@@ -188,7 +188,7 @@ export default async function DashboardPage({
               <tr>
                 <th className="px-3 py-3">#</th>
                 <th className="px-3 py-3">Staff</th>
-                <th className="px-3 py-3">Date</th>
+                <th className="px-3 py-3">Shift start date</th>
                 <th className="px-3 py-3">Check in</th>
                 <th className="px-3 py-3">Check out</th>
                 <th className="px-3 py-3">Status</th>
@@ -230,10 +230,10 @@ export default async function DashboardPage({
                           {isoDateValue(attend.attendance_date ?? attend.check_in_time)}
                         </span>
                       </td>
-                      <td className="px-3 py-3">{actionDate(attend.check_in_time)}</td>
+                      <td className="px-3 py-3">{attendanceStamp(attend.check_in_time)}</td>
                       <td className="px-3 py-3">
                         {attend.check_out_time ? (
-                          actionDate(attend.check_out_time)
+                          attendanceStamp(attend.check_out_time)
                         ) : (
                           <span className="text-red-600">Not signed out</span>
                         )}

@@ -133,7 +133,7 @@ export async function getOpenAttendance(db: Connection, userId: number, hospital
   );
 }
 
-/** Most recent completed shift started today (for status messaging only). */
+/** Most recent shift completed today, including one started on an earlier day. */
 export async function getLatestCompletedToday(
   db: Connection,
   userId: number,
@@ -144,7 +144,7 @@ export async function getLatestCompletedToday(
     db,
     `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status
      FROM \`attendance\`
-     WHERE user_id=? AND hospital_id=? AND check_in_time>=? AND check_in_time<? AND check_out_time IS NOT NULL AND NOW() IS NOT NULL
+     WHERE user_id=? AND hospital_id=? AND check_out_time>=? AND check_out_time<? AND NOW() IS NOT NULL
      ORDER BY check_out_time DESC
      LIMIT 1`,
     [userId, hospitalId, `${today} 00:00:00`, `${nextIsoDay(today) ?? today} 00:00:00`],

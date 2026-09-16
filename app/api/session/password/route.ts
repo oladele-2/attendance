@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return null;
     });
 
-    if (!user || !user.last || !user.pass || !verifyPhpPassword(password, user.last, user.pass)) {
+    if (!user || !user.pass || !verifyPhpPassword(password, user.last ?? "", user.pass)) {
       return Response.redirect(new URL("/signin?error=invalid-login", request.url), 303);
     }
     if (!userApproved(user)) {

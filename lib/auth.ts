@@ -14,14 +14,18 @@ function passwordPepper() {
 }
 
 export function verifyPhpPassword(plain: string, lastName: string, hash: string) {
-  const salted = `${plain}${lastName}${passwordPepper()}`;
   const normalized = hash.replace(/^\$2y\$/, "$2a$");
-  return bcrypt.compareSync(salted, normalized);
+  // Ajirmed switched to bcrypt(password) for user_id > 158924. Accept both
+  // formats because older hashes still include the surname and PHP $obe.
+  return (
+    bcrypt.compareSync(plain, normalized) ||
+    bcrypt.compareSync(`${plain}${lastName}${passwordPepper()}`, normalized)
+  );
 }
 
-/** Same scheme as PHP: bcrypt(password + lastName + pepper), stored as $2y$. */
-export function hashPhpPassword(plain: string, lastName: string) {
-  const hash = bcrypt.hashSync(`${plain}${lastName}${passwordPepper()}`, 10);
+/** New accounts use standard bcrypt; existing PHP hashes remain valid at login. */
+export function hashPassword(plain: string) {
+  const hash = bcrypt.hashSync(plain, 10);
   return hash.replace(/^\$2a\$/, "$2y$").replace(/^\$2b\$/, "$2y$");
 }
 

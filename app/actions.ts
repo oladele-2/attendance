@@ -17,7 +17,7 @@ import {
   updateCheckOut,
   updatePrivilegeStatus,
 } from "@/lib/queries";
-import { companyAllowsLogin, hashPhpPassword, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
+import { companyAllowsLogin, hashPassword, isEmail, isPhone, userApproved, verifyPhpPassword } from "@/lib/auth";
 import { getSession, setSession } from "@/lib/session";
 import { normalizePhotoFilename } from "@/lib/brand";
 
@@ -26,9 +26,15 @@ function fail(path: string, code: string): never {
 }
 
 function hhmm(raw: string) {
-  const match = raw.trim().match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return "";
+  const match = raw.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return "";
   return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
+function validDay(day: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date)).toISOString().slice(0, 10) === day;
 }
 
 export async function submitPasscode(formData: FormData) {
@@ -71,7 +77,7 @@ export async function submitPasswordLogin(formData: FormData) {
   if (!session?.company_id) fail("/passcode", "session");
 
   const identifier = String(formData.get("member_email") ?? "").trim();
-  const password = String(formData.get("member_password") ?? "").trim();
+  const password = String(formData.get("member_password") ?? "");
   if (!identifier || !password) {
     fail("/signin", "missing-details");
   }
@@ -87,7 +93,7 @@ export async function submitPasswordLogin(formData: FormData) {
     fail("/signin", "db");
   }
 
-  if (!user || !user.last || !user.pass || !verifyPhpPassword(password, user.last, user.pass)) {
+  if (!user || !user.pass || !verifyPhpPassword(password, user.last ?? "", user.pass)) {
     fail("/signin", "invalid-login");
   }
   if (!userApproved(user)) {
@@ -129,20 +135,24 @@ export async function saveAttendanceEdit(id: number, formData: FormData) {
   if (!session?.company_id) fail("/passcode", "session");
   if (session.privilege !== "CEO") fail("/dashboard", "ceo-only");
 
-  const attendanceDate = String(formData.get("attendance_date") ?? "").slice(0, 10);
+  const attendanceDate = String(formData.get("attendance_date") ?? "");
+  const checkOutDate = String(formData.get("check_out_date") ?? "");
   const checkInRaw = hhmm(String(formData.get("check_in_time") ?? ""));
   const checkOutRaw = hhmm(String(formData.get("check_out_time") ?? ""));
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate) || !checkInRaw) {
+  if (!validDay(attendanceDate) || !checkInRaw) {
     fail(`/dashboard/${id}/edit`, "invalid-times");
   }
-  if (checkOutRaw && checkOutRaw < checkInRaw) {
+  if (checkOutRaw && !validDay(checkOutDate)) {
     fail(`/dashboard/${id}/edit`, "invalid-times");
   }
 
   const status = checkOutRaw ? 1 : 0;
   const checkIn = `${attendanceDate} ${checkInRaw}:00`;
-  const checkOut = checkOutRaw ? `${attendanceDate} ${checkOutRaw}:00` : null;
+  const checkOut = checkOutRaw ? `${checkOutDate} ${checkOutRaw}:00` : null;
+  if (checkOut && checkOut <= checkIn) {
+    fail(`/dashboard/${id}/edit`, "invalid-times");
+  }
 
   let record;
   try {
@@ -269,7 +279,7 @@ export async function createStaff(formData: FormData) {
           first,
           last,
           email,
-          pass: hashPhpPassword(password, last),
+          pass: hashPassword(password),
           friendly,
           gender,
           pre,

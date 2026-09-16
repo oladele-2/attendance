@@ -17,7 +17,7 @@ export const ERROR_COPY: Record<string, string> = {
   "ceo-only": "Only the CEO can edit or delete attendance records.",
   "admin-only": "Only Admin or CEO can open this page.",
   "not-found": "That record was not found, or it belongs to another facility.",
-  "invalid-times": "Check-in time is required. Check-out must be after check-in.",
+  "invalid-times": "Enter a valid check-in date and time. Check-out must be after check-in.",
   "session": "Your session expired. Please sign in again.",
   "db": "We could not reach the database. Try again in a moment.",
   "no-permission": "You do not have permission to do that.",

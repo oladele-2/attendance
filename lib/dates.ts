@@ -54,7 +54,12 @@ export function parseDateTime(value: unknown): Date | null {
   }
   const raw = String(value).trim();
   if (!raw || raw === "[object Object]") return null;
-  const mysql = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  // An ISO timestamp with Z or an offset already identifies an instant.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)) {
+    const instant = new Date(raw);
+    return Number.isNaN(instant.getTime()) ? null : instant;
+  }
+  const mysql = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/);
   if (mysql) {
     const date = new Date(`${mysql[1]}T${mysql[2]}${APP_TZ_OFFSET}`);
     return Number.isNaN(date.getTime()) ? null : date;
@@ -146,6 +151,15 @@ export function mysqlLagosStamp(value: unknown) {
   hour = hour % 12;
   if (hour === 0) hour = 12;
   return `${match[1]} ${hour}:${match[3]} ${ampm}`;
+}
+
+/** Always show the calendar day, including for a punch made minutes ago. */
+export function attendanceStamp(value: string | Date | null | undefined) {
+  const stored = typeof value === "string" && !/[Zz]$|[+-]\d{2}:\d{2}$/.test(value)
+    ? mysqlLagosStamp(value) : "";
+  if (stored) return stored;
+  const date = parseDateTime(value);
+  return date ? `${shortDay(date)} ${clock(date)}` : "";
 }
 
 export function isoDateValue(value: string | Date | null | undefined) {

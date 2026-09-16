@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/guards";
 import { withDb } from "@/lib/db";
 import { hospitalAttendance, hospitalAttendanceStats } from "@/lib/queries";
-import { actionDate, currentMonthIso, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
+import { attendanceStamp, currentMonthIso, formatMonthTitle, isoDateValue, minutesToHm } from "@/lib/dates";
 import { attendanceExportPath } from "@/lib/report-csv";
 import { IconCalendar, IconCheck, IconClock, IconDownload, IconXCircle } from "@/components/icons";
 
@@ -116,9 +116,9 @@ export default async function MyHoursPage({
                         {isoDateValue(row.attendance_date ?? row.check_in_time)}
                       </span>
                     </td>
-                    <td className="px-3 py-3">{actionDate(row.check_in_time)}</td>
+                    <td className="px-3 py-3">{attendanceStamp(row.check_in_time)}</td>
                     <td className="px-3 py-3">
-                      {row.check_out_time ? actionDate(row.check_out_time) : <span className="text-red-600">Open</span>}
+                      {row.check_out_time ? attendanceStamp(row.check_out_time) : <span className="text-red-600">Open</span>}
                     </td>
                     <td className="px-3 py-3">{row.hours_worked ?? "—"}</td>
                   </tr>

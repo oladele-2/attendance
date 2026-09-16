@@ -16,6 +16,43 @@ Worker entry point, and validates the final Worker bundle with Wrangler.
 
 Open the printed local URL. Enter the facility passcode (company `id`), then QR or email/phone login.
 
+## Shared Ajirmed password compatibility
+
+Ajirmed PHP uses `bcrypt(password + last name + $obe)` for legacy users and
+`bcrypt(password)` for users with `user_id > 158924`. Attendance accepts both
+formats, including PHP's `$2y$` prefix and accounts with an empty surname. New
+Attendance accounts use password-only bcrypt so Ajirmed can verify them too.
+`PASSWORD_PEPPER` must still match PHP `$obe` for legacy users.
+
+The canonical PHP rule supplied by the maintainer is:
+
+```php
+if (isset($pa) && !empty($pa)) {
+    if ($user_id > 158924) {
+        $passw = $pa;
+    } else {
+        $passw = $pa . $last . $obe;
+    }
+}
+```
+
+User ID **158924 itself uses the legacy format**. Apply this rule before bcrypt
+hashing when setting or resetting an existing user's password. Keep login,
+account creation, password changes, and password resets compatible with this
+shared PHP rule. Do not change a legacy user's hash to password-only bcrypt
+without also updating Ajirmed's verifier. Keep regression coverage for both
+formats when changing authentication.
+
+The previous Attendance verifier only checked the legacy format, causing newer
+Ajirmed accounts to receive `invalid-login` with a correct password. The Ajirmed
+backup confirms this for Glory (188716) and Crystabel (189881): their supplied
+password matches password-only bcrypt and fails the legacy check. Their records
+were absent from the local development database; live account verification must
+use the production database. Deploy the rebuilt Worker to apply the fix live.
+
+Run `npm run test:auth` for regression coverage of both formats, wrong passwords,
+legacy surname/pepper checks, and password whitespace.
+
 ## Hyperdrive (Cloudways MariaDB)
 
 Hyperdrive needs the **public** Cloudways host, TLS enabled, and remote MySQL allowed.
