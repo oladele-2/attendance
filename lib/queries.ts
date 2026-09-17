@@ -266,6 +266,36 @@ export async function companyStaffPage(
   );
 }
 
+/** All staff at a facility, used for exports and print layouts. */
+export async function companyStaffAll(db: Connection, company: number, search?: string) {
+  const filter = rosterEmployeeWhere(company, search);
+  return queryAll<
+    RowDataPacket & {
+      user_id: number;
+      privilege: string;
+      status: string;
+      first: string | null;
+      last: string | null;
+      friendly: string | null;
+      gender: string | null;
+      pre: string | null;
+      phone: string | null;
+      img: string | null;
+      has_face: number;
+    }
+  >(
+    db,
+    `SELECT CAST(TRIM(p.\`user_id\`) AS UNSIGNED) AS user_id, p.\`privilege\`, p.\`status\`,
+        u.\`first\`, u.\`last\`, u.\`friendly\`, u.\`gender\`, u.\`pre\`, u.\`phone\`, u.\`img\`,
+        IF(u.\`face_vector\` IS NULL OR u.\`face_vector\` = '', 0, 1) AS has_face
+     FROM \`privilege\` p
+     LEFT JOIN \`user\` u ON u.\`user_id\` = CAST(TRIM(p.\`user_id\`) AS UNSIGNED)
+     ${filter.sql}
+     ORDER BY u.\`last\`, u.\`first\``,
+    filter.params,
+  );
+}
+
 export async function facilityStaffOptions(db: Connection, company: number) {
   return queryAll<RowDataPacket & { user_id: number; first: string | null; last: string | null }>(
     db,
