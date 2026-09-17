@@ -7,7 +7,7 @@ import { sessionFromCookieHeader, userCookieHeader } from "@/lib/session";
 
 export async function POST(request: Request) {
   const session = await sessionFromCookieHeader(request.headers.get("cookie"));
-  if (!session?.user_id || !session.privilege_id || !session.company_id) {
+  if (!session?.user_id || !session.company_id) {
     return Response.json(
       { success: false, status_code: 401, message: "Your session expired. Please sign in again." },
       { status: 401 },
@@ -50,7 +50,6 @@ export async function POST(request: Request) {
           db,
           session.user_id!,
           session.company_id,
-          session.privilege_id!,
           Number(body.attendanceId),
         );
         return {
@@ -86,7 +85,7 @@ export async function POST(request: Request) {
         }
       }
 
-      const punch = await punchAttendance(db, session.user_id!, session.company_id, session.privilege_id!);
+      const punch = await punchAttendance(db, session.user_id!, session.company_id);
       const viaFace = liveFace ? "Face verified. " : "";
       const clock = lagosClockNow();
       const signedOut = punch.action === "Checked out";

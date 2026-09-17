@@ -641,12 +641,27 @@ export async function updateFaceVector(db: Connection, faceVector: string, userI
   await db.query("UPDATE user SET face_vector = ? WHERE user_id = ?", [faceVector, userId]);
 }
 
-export async function updatePrivilegeStatus(db: Connection, status: string, id: number) {
-  const [result] = await db.query<ResultSetHeader>("UPDATE `privilege` SET `status`=?, `at`=CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00') WHERE `id`=?", [
-    status,
-    id,
-  ]);
-  if (!result.affectedRows) {
+/**
+ * Keep the on-duty status tied to the authenticated user and facility, not to
+ * a privilege id cached in a login cookie. Older data can contain duplicate
+ * privilege rows, so synchronize all rows for this user/facility together.
+ */
+export async function updatePrivilegeStatus(
+  db: Connection,
+  status: string,
+  userId: number,
+  companyId: number,
+) {
+  const [existing] = await db.query<RowDataPacket[]>(
+    "SELECT `id` FROM `privilege` WHERE CAST(TRIM(`user_id`) AS UNSIGNED)=? AND `company`=?",
+    [userId, companyId],
+  );
+  if (!existing.length) {
     throw new Error("On-duty status was not updated.");
   }
+
+  await db.query(
+    "UPDATE `privilege` SET `status`=?, `at`=CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00') WHERE CAST(TRIM(`user_id`) AS UNSIGNED)=? AND `company`=?",
+    [status, userId, companyId],
+  );
 }
