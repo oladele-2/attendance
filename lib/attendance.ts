@@ -9,8 +9,10 @@ import {
   updatePrivilegeStatus,
 } from "./queries";
 import { isoDate, parseDateTime } from "./dates";
+import { OPEN_SHIFT_MAX_MINUTES } from "./shift-rules";
 
 export const UNDO_SECONDS = 120;
+export { OPEN_SHIFT_MAX_HOURS, OPEN_SHIFT_MAX_MINUTES } from "./shift-rules";
 
 export async function punchAttendance(
   db: Connection,
@@ -19,24 +21,27 @@ export async function punchAttendance(
 ) {
   await db.beginTransaction();
   try {
+    // Only open shifts within OPEN_SHIFT_MAX_HOURS are eligible for check-out.
+    // Older open rows are void and left alone; this punch creates a new check-in.
     const open = await getOpenAttendance(db, userId, companyId);
+    const minutesOpen = Math.max(0, Number(open?.minutes_open ?? 0));
+    const canCheckOut =
+      Boolean(open?.check_in_time && !open.check_out_time) && minutesOpen < OPEN_SHIFT_MAX_MINUTES;
 
-    if (open?.check_in_time && !open.check_out_time) {
+    if (canCheckOut && open) {
       await updateCheckOut(db, 1, open.id);
       await updatePrivilegeStatus(db, "DISAPPROVED", userId, companyId);
       await db.commit();
       const checkInDay = isoDate(open.check_in_time);
       const today = isoDate();
-      const note = Number(open.minutes_open ?? 0) >= 24 * 60
-        ? ` (Shift started ${checkInDay}; review its check-in date if this is unexpected)`
-        : checkInDay < today ? " (Night shift from a previous day)" : "";
+      const note = checkInDay < today ? " (Night shift from a previous day)" : "";
       return {
         success: true as const,
         action: "Checked out" as const,
         note,
         attendanceId: open.id,
         signedOut: true,
-        durationMinutes: Math.max(0, Number(open.minutes_open ?? 0)),
+        durationMinutes: minutesOpen,
       };
     }
 

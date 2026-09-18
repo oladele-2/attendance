@@ -152,7 +152,7 @@ export default async function DashboardPage({
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Management summary</h2>
-                <p className="text-xs text-slate-500">Late means checked in after 9:00 AM. Long means over 12 hours or still open.</p>
+                <p className="text-xs text-slate-500">Late means checked in after 9:00 AM. Long/void means open past 20 hours or a closed shift over 20 hours.</p>
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -208,9 +208,11 @@ export default async function DashboardPage({
                   const badge =
                     attend.status_text === "Void"
                       ? "bg-red-100 text-red-800"
-                      : attend.status_text === "Present"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-slate-100 text-slate-700";
+                      : attend.status_text === "On duty"
+                        ? "bg-sky-100 text-sky-800"
+                        : attend.status_text === "Present"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-slate-100 text-slate-700";
                   return (
                     <tr key={attend.id} className="border-t border-slate-100 hover:bg-slate-50">
                       <td className="px-3 py-3 text-slate-400">{offset + ky + 1}</td>

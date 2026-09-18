@@ -16,7 +16,7 @@ export function attendanceCsv(rows: AttendanceRow[]) {
         csvCell(`${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || row.user_id),
         csvCell(isoDateValue(row.attendance_date ?? row.check_in_time)),
         csvCell(attendanceStamp(row.check_in_time)),
-        csvCell(row.check_out_time ? attendanceStamp(row.check_out_time) : "Not signed out"),
+        csvCell(row.check_out_time ? attendanceStamp(row.check_out_time) : row.status_text === "Void" ? "Void" : "Not signed out"),
         csvCell(row.status_text ?? ""),
         csvCell(row.hours_worked ?? ""),
       ].join(","),

@@ -11,6 +11,7 @@ import {
 } from "@/lib/queries";
 import { attendanceStamp, minutesToHm, mysqlLagosStamp } from "@/lib/dates";
 import { isoDate } from "@/lib/dates";
+import { OPEN_SHIFT_MAX_HOURS } from "@/lib/shift-rules";
 import { IconCamera, IconCheck, IconClock, IconPhone, IconScanFace, IconUser } from "@/components/icons";
 
 export default async function VerificationPage({
@@ -31,6 +32,7 @@ export default async function VerificationPage({
   try {
     const result = await withDb(async (db) => {
       const foundUser = await getUserContact(db, session.user_id!);
+      // Only shifts open less than OPEN_SHIFT_MAX_HOURS — older open rows are void.
       const open = await getOpenAttendance(db, session.user_id!, session.company_id);
       const completed = await getLatestCompletedToday(db, session.user_id!, session.company_id, today);
       const count = await countShiftsToday(db, session.user_id!, session.company_id, today);
@@ -74,10 +76,8 @@ export default async function VerificationPage({
     buttonLabel = "Unavailable";
   } else if (openShift) {
     const dayLabel = openShift.check_in_day === today ? "today" : "on a previous day";
-    statusMessage = `Checked in ${dayLabel} at ${attendanceStamp(openShift.check_in_time)}. Don’t forget to check out.`;
-    if (openShift.minutes_open >= 24 * 60) {
-      statusMessage += " This shift has been open for more than a day. Check the recorded check-in date before checking out.";
-    } else if (openShift.check_in_day < today) {
+    statusMessage = `Checked in ${dayLabel} at ${attendanceStamp(openShift.check_in_time)}. Don’t forget to check out within ${OPEN_SHIFT_MAX_HOURS} hours.`;
+    if (openShift.check_in_day < today) {
       statusMessage += " Night shift still open.";
     }
     statusClass = "bg-[#e6f7ff] border-[#80d4ff] text-[#006699]";
@@ -108,11 +108,12 @@ export default async function VerificationPage({
         {loadError ? <FlashBanner error={loadError} /> : null}
 
         {needsCheckoutWarning && openShift ? (
-          <div role="alert" className="mb-5 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-center text-red-900">
-            <p className="text-lg font-bold">Your previous shift is still open</p>
+          <div role="alert" className="mb-5 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-center text-amber-950">
+            <p className="text-lg font-bold">Long open shift</p>
             <p className="mt-1 text-sm">
-              You checked in {mysqlLagosStamp(openShift.check_in_time)} and have been on duty for {minutesToHm(openShift.minutes_open)}.
-              Check the check-in date carefully before checking out. A facility CEO can correct a mistaken record.
+              You checked in {mysqlLagosStamp(openShift.check_in_time)} and have been on duty for{" "}
+              {minutesToHm(openShift.minutes_open)}. Check out within {OPEN_SHIFT_MAX_HOURS} hours, or this shift
+              becomes void and your next punch will be a new check-in.
             </p>
           </div>
         ) : null}

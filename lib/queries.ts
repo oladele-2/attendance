@@ -1,6 +1,10 @@
 import type { Connection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { queryAll, queryOne } from "./db";
+import { OPEN_SHIFT_MAX_MINUTES } from "./shift-rules";
 import type { AttendanceRow, CompanyRow, PrivilegeRow, UserRow } from "./types";
+
+/** Africa/Lagos wall clock for NOW()-style comparisons (session time_zone may differ). */
+const LAGOS_NOW = `CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')`;
 
 type CountRow = RowDataPacket & { total: number };
 type SummaryRow = RowDataPacket & {
@@ -119,17 +123,21 @@ export async function getPrivilegeAtCompany(db: Connection, userId: number, comp
   );
 }
 
-/** Latest open shift for this staff at this facility (supports overnight + multi-shift days). */
+/**
+ * Latest *active* open shift (check-in with no check-out) within OPEN_SHIFT_MAX_HOURS.
+ * Older open rows are void and ignored so the next punch creates a new check-in.
+ */
 export async function getOpenAttendance(db: Connection, userId: number, hospitalId: number) {
   return queryOne<RowDataPacket & AttendanceRow & { minutes_open: number }>(
     db,
     `SELECT id, user_id, ${DAY_EXPR()} AS attendance_date, check_in_time, check_out_time, hospital_id, status,
-       TIMESTAMPDIFF(MINUTE, check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
+       TIMESTAMPDIFF(MINUTE, check_in_time, ${LAGOS_NOW}) AS minutes_open
      FROM \`attendance\`
      WHERE user_id=? AND hospital_id=? AND check_in_time IS NOT NULL AND check_out_time IS NULL
+       AND TIMESTAMPDIFF(MINUTE, check_in_time, ${LAGOS_NOW}) < ?
      ORDER BY check_in_time DESC
      LIMIT 1`,
-    [userId, hospitalId],
+    [userId, hospitalId, OPEN_SHIFT_MAX_MINUTES],
   );
 }
 
@@ -484,7 +492,10 @@ export async function hospitalAttendance(
     `SELECT a.id, a.user_id, ${day} AS attendance_date, a.check_in_time, a.check_out_time, a.status,
         u.first AS first_name, u.last AS last_name,
         CASE
-            WHEN a.check_in_time IS NOT NULL AND a.check_out_time IS NULL THEN 'Void'
+            WHEN a.check_out_time IS NULL
+              AND TIMESTAMPDIFF(MINUTE, a.check_in_time, ${LAGOS_NOW}) >= ${OPEN_SHIFT_MAX_MINUTES}
+              THEN 'Void'
+            WHEN a.check_out_time IS NULL THEN 'On duty'
             WHEN a.status = 1 THEN 'Present'
             WHEN a.status = 0 THEN 'Absent'
             ELSE 'Unknown'
@@ -535,7 +546,7 @@ export async function hospitalAttendanceStats(
        SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) AS total_absent,
        SUM(CASE WHEN status = 1 THEN TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) ELSE 0 END) AS total_minutes,
        SUM(CASE WHEN TIME(check_in_time) > '09:00:00' THEN 1 ELSE 0 END) AS late_arrivals,
-       SUM(CASE WHEN check_out_time IS NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) > 720 THEN 1 ELSE 0 END) AS long_or_incomplete,
+       SUM(CASE WHEN check_out_time IS NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= ${OPEN_SHIFT_MAX_MINUTES} THEN 1 ELSE 0 END) AS long_or_incomplete,
        ROUND(100 * SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS attendance_percentage
      FROM attendance${filter.sql}`,
     filter.params,
@@ -564,15 +575,18 @@ export async function insertCheckIn(db: Connection, userId: number, hospitalId: 
 
 export async function updateCheckOut(db: Connection, status: number, id: number) {
   const [result] = await db.query<ResultSetHeader>(
-    "UPDATE attendance SET status = ?, check_out_time = CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00') WHERE id = ? AND check_out_time IS NULL",
-    [status, id],
+    `UPDATE attendance SET status = ?, check_out_time = ${LAGOS_NOW}
+     WHERE id = ? AND check_out_time IS NULL
+       AND TIMESTAMPDIFF(MINUTE, check_in_time, ${LAGOS_NOW}) < ?`,
+    [status, id, OPEN_SHIFT_MAX_MINUTES],
   );
   if (!result.affectedRows) {
-    throw new Error("Check-out was not saved. The shift may already be closed.");
+    throw new Error("Check-out was not saved. The shift may already be closed or is past the 20-hour window.");
   }
   return Number(result.affectedRows);
 }
 
+/** Active on-duty open shifts only (within OPEN_SHIFT_MAX_HOURS). Older open rows are void. */
 export async function listOpenShifts(db: Connection, hospitalId: number) {
   return queryAll<
     RowDataPacket & {
@@ -587,14 +601,14 @@ export async function listOpenShifts(db: Connection, hospitalId: number) {
   >(
     db,
     `SELECT a.id, a.user_id, a.check_in_time, u.first, u.last, u.img,
-        TIMESTAMPDIFF(MINUTE, a.check_in_time, CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00')) AS minutes_open
+        TIMESTAMPDIFF(MINUTE, a.check_in_time, ${LAGOS_NOW}) AS minutes_open
      FROM attendance a
      LEFT JOIN user u ON u.user_id = a.user_id
      WHERE a.hospital_id=? AND a.check_out_time IS NULL AND a.check_in_time IS NOT NULL
-       AND a.check_in_time >= DATE_SUB(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+01:00'), INTERVAL 24 HOUR)
+       AND TIMESTAMPDIFF(MINUTE, a.check_in_time, ${LAGOS_NOW}) < ?
      ORDER BY a.check_in_time ASC
      LIMIT 200`,
-    [hospitalId],
+    [hospitalId, OPEN_SHIFT_MAX_MINUTES],
   );
 }
 
